@@ -1,0 +1,29 @@
+name: Development task
+description: 可验收的开发或交付任务
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 用户场景与目标
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 所属范围
+      options:
+        - teacher
+        - student
+        - platform
+        - shared
+        - content-and-deliverables
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完成标准与验证方法
+    validations:
+      required: true
+  - type: textarea
+    id: dependency
+    attributes:
+      label: 依赖、共用接口与负责人

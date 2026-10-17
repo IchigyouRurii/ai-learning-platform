@@ -1,0 +1,13 @@
+# Replace placeholders with real GitHub usernames before enabling required reviews.
+# Do not add fake @user entries: they do not assign reviewers.
+# /src/modules/teacher/        @teacher-owner-1 @teacher-owner-2
+# /src/app/(workspace)/teacher/            @teacher-owner-1 @teacher-owner-2
+# /src/modules/student/        @student-owner-1 @student-owner-2
+# /src/app/(workspace)/student/            @student-owner-1 @student-owner-2
+# /src/modules/platform/       @infrastructure-owner
+# /database/                   @infrastructure-owner
+# /src/shared/contracts/       @infrastructure-owner @teacher-owner-1 @student-owner-1
+# /src/shared/ui/              @ui-maintainer
+# /src/shared/ai/              @teacher-owner-2
+# /package.json                @infrastructure-owner
+# /pnpm-lock.yaml              @infrastructure-owner

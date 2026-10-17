@@ -1,0 +1,30 @@
+# 需求追踪
+
+依据用户提供的 Project Overview。这里区分原始要求和框架中的设计选择，不把建议当成课程方规定。
+
+| 要求方向                                           | 框架落点                                  | 当前状态                                             |
+| -------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------- |
+| 多门微课程，覆盖软件工程、AI 编程、软技能/产品技能 | seed + teacher course builder             | 三门短示例，不是最终课程；原文没有规定数量           |
+| 互动内容与活动                                     | ContentBlock/Activity 契约、学生 renderer | 开放回答可运行；其他活动/媒体待实现                  |
+| AI 教学、适应背景和目标                            | student activities/learning               | 演示模板；可配置真实模型；长期个性化策略待设计       |
+| 教师手动/AI 修改已有课程                           | teacher course builder                    | 新生成草稿保存前可编辑；已有课程编辑与版本管理待实现 |
+| 根据主题、要求和材料生成课程                       | teacher generation service                | mock 或真实兼容 API，可保存并发布                    |
+| 导入学生、追踪参与                                 | platform enrollments + teacher dashboard  | 自助加入/提交/反馈可演示；批量导入待实现             |
+| 其他学科、自定主题和自学路径                       | subject/audience/goals/visibility         | 数据方向预留；学生建课与路径待实现                   |
+| admin/instructor/student 使用说明                  | docs/deliverables                         | 模板；admin 仅角色类型预留，原文未指定管理功能       |
+| 多原型、访谈、过程证据与个人贡献                   | docs/evidence + GitHub 模板               | 记录结构已提供，需要团队实际完成                     |
+| 公开部署、视频、报告、slides、presentation         | docs/deliverables                         | 本版仅本地；正式部署前完成生产接入                   |
+
+文档日期与系统评分权重存在不一致，实际截止日期和评分比例需向课程方核实，不写死在计划中。
+
+## 2026-10-17 基建更新
+
+数据库统一选择 Neon；账号、密码和会话采用 Better Auth，学生/教师通过真实账号区分。Neon 仓储与初始化脚本已提供，连接串由项目负责人填写后再进行实际云端验收。初始本地 demo 仍可显式选择，不会自动迁移其中的数据。
+
+## 2026-10-17 功能清单截图补充
+
+用户后续截图明确了管理员基本管理、班级与课程分配、学生个人课程、学习路径、上传、测验、师生问答等范围。它补充了前面的原始 Project Overview 追踪表；不能再把管理员职责标为完全未指定。
+
+当前技术选择遵循后续用户决定：OpenRouter 免费路由、Neon、Next.js 全栈、shadcn/ui；Server Actions 与 Route Handlers 共同承接服务端适配。截图写的 DeepSeek 不会覆盖用户后来选定的 AI 配置。
+
+本机 Neon 连接、初始化和三个测试账号登录已验收；OpenRouter 基础连接已验收，完整 AI 教学质量仍需验证。新增领域已有数据定义与明确的预留服务/仓储接口，状态仍为未实现。按截图逐条对应的现有/预留能力见 [接口覆盖矩阵](../engineering/feature-contracts.md#需求覆盖矩阵)。

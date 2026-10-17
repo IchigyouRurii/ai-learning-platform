@@ -1,0 +1,15 @@
+name: Bug report
+description: 记录可重现的问题
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: 身份、页面与复现步骤
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果与实际结果
+    validations:
+      required: true
