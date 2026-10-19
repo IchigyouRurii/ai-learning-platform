@@ -7,3 +7,7 @@ coverage/
 .DS_Store
 playwright-report/
 test-results/
+
+# Local environment and secrets
+.env
+.env.*
