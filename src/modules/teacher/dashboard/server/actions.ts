@@ -15,7 +15,7 @@ export async function sendFeedbackAction(
     const text = z
       .string()
       .trim()
-      .min(2, "请填写反馈内容。")
+      .min(2, "Please enter your feedback.")
       .max(2000)
       .parse(message);
     await addTeacherFeedback(await getCurrentUser(), courseId, studentId, text);

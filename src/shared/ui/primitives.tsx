@@ -1,5 +1,11 @@
 import type { ReactNode } from "react";
-import { ArrowUpRight, BookOpen, Layers3 } from "lucide-react";
+import {
+  ArrowUpRight,
+  BookOpen,
+  Braces,
+  Layers3,
+  Workflow,
+} from "lucide-react";
 import Link from "next/link";
 import type { Course } from "@/shared/contracts";
 import { getActivities } from "@/shared/contracts";
@@ -65,7 +71,7 @@ export function ProgressBar({ percent }: { percent: number }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
-      aria-label="活动完成进度"
+      aria-label="Activity completion"
     >
       <div style={{ width: `${percent}%` }} />
     </div>
@@ -97,16 +103,17 @@ export function CourseCard({
   index?: number;
   footer?: ReactNode;
 }) {
+  const CoverIcon = [Workflow, Braces, BookOpen][index % 3];
   return (
     <article className="course-card">
       <Link
         href={href}
         className={`course-art art-${index % 3}`}
-        aria-label={`打开课程：${course.title}`}
+        aria-label={`Open course: ${course.title}`}
       >
-        <div className="art-grid" />
+        <div className="art-grid" aria-hidden="true" />
         <span className="course-art-label">{course.subject}</span>
-        <span className="art-symbol">{["↗", "{ }", "✳"][index % 3]}</span>
+        <CoverIcon className="art-symbol" aria-hidden="true" strokeWidth={1} />
         <span className="art-number">
           MINI COURSE · {String(index + 1).padStart(2, "0")}
         </span>
@@ -115,10 +122,10 @@ export function CourseCard({
         <div className="course-meta">
           <span>
             <Layers3 size={13} />
-            {course.lessons.length} 节短课
+            {course.lessons.length} lessons
           </span>
           <Badge tone={course.status === "published" ? "green" : "amber"}>
-            {course.status === "published" ? "已发布" : "草稿"}
+            {course.status === "published" ? "Published" : "Draft"}
           </Badge>
         </div>
         <h3>
@@ -126,11 +133,11 @@ export function CourseCard({
         </h3>
         <p>{course.description}</p>
         <div className="course-footer">
-          {footer ?? <span>{getActivities(course).length} 个互动任务</span>}
+          {footer ?? <span>{getActivities(course).length} activities</span>}
           <Link
             href={href}
             className="icon-link"
-            aria-label={`进入${course.title}`}
+            aria-label={`Open ${course.title}`}
           >
             <ArrowUpRight size={18} />
           </Link>

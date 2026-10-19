@@ -1,7 +1,7 @@
 export function getAppMode(): "demo" | "neon" {
   const mode = process.env.APP_MODE ?? "neon";
   if (mode !== "demo" && mode !== "neon")
-    throw new Error("APP_MODE 只能为 demo 或 neon。");
+    throw new Error("APP_MODE must be demo or neon.");
   return mode;
 }
 

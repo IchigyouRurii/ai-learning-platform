@@ -9,8 +9,8 @@ export default async function NewCoursePage() {
     <>
       <PageHeading
         eyebrow="COURSE STUDIO"
-        title="把你的知识，变成一段学习旅程。"
-        description="提供目标与材料，生成草稿；审核、编辑后再让学生加入。"
+        title="Create a course"
+        description="Generate a draft from your goals and materials. Review and edit before publishing."
       />
       <CourseBuilder />
     </>

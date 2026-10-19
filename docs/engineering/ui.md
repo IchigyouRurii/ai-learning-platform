@@ -1,19 +1,17 @@
-# 公共 UI 与 shadcn/ui
+# 公共 UI 接入
 
-项目使用 React、Tailwind CSS 4 和 shadcn/ui，组件源文件随仓库管理。shadcn 是基础 UI，不提供课程、权限或数据库逻辑。
+统一视觉以 [前端规范 v2](frontend-ui-guide.md) 为准：深靛蓝、浅灰蓝渐变、64px 窄导航、60px 顶部栏、18px 阴影卡片。平台名称统一为 **OpenLearnING**，界面使用英文；保留角色权限和业务流程。登录页只更新品牌与文案，布局和样式保持不变。
 
-## 目录
+## 样式入口
 
-- `components.json`：官方 CLI 配置，采用 `new-york` 风格和 Lucide 图标。
-- `src/shared/ui/components/`：基础组件。目前包含 Button、Input、Textarea、Label、Card、Dialog、Table。
-- `src/shared/ui/utils.ts`：统一的 `cn` 类名合并工具，使用当前官方组件依赖的 `cn` 包。
-- `src/shared/ui/styles.css`：Tailwind 入口、语义颜色与圆角变量，主题沿用平台的绿色。
-- `src/shared/ui/legacy.css`：原有页面样式，放在 CSS components 层。原有表单元素规则排除带 `data-slot` 的基础组件，避免相互覆盖。
-- `src/shared/ui/primitives.tsx`：课程卡片、进度展示等现有公共组合组件，按需逐步迁移。
+- `src/shared/ui/tokens.css`：原型提取的颜色、字体、尺寸、圆角与阴影；辅助文字适当加深。
+- `styles.css`：全局入口，将变量映射到 Tailwind CSS 4 / shadcn/ui 语义主题。
+- `workspace.css`：现有业务页统一布局和组件外观；手机端保留文字导航和单列课程。
+- `legacy.css`：旧页面结构兼容。`--green` 等旧变量暂时映射到新主题，新增代码勿继续使用旧命名。
 
-登录和注册页已使用 Button、Input、Label，登录校验与服务端权限保持原有流程。当前只提供浅色主题；配置中的 dark 变体用于兼容官方组件，不代表已经实现主题切换。
+根布局已加载样式，页面无需重复导入。颜色优先使用 `bg-primary`、`text-foreground` 等语义类，不独立硬编码主题。
 
-## 使用
+## 组件复用
 
 ```tsx
 import { Button } from "@/shared/ui/components/button";
@@ -23,36 +21,30 @@ import { Label } from "@/shared/ui/components/label";
 export function CourseTitleField() {
   return (
     <div className="grid gap-2">
-      <Label htmlFor="course-title">课程标题</Label>
-      <Input id="course-title" name="title" placeholder="输入课程标题" />
-      <Button type="submit">保存</Button>
+      <Label htmlFor="course-title">Course title</Label>
+      <Input id="course-title" name="title" placeholder="Enter a course title" />
+      <Button type="submit">Save</Button>
     </div>
   );
 }
 ```
 
-Dialog 请同时提供 DialogTitle、DialogDescription，并检查键盘聚焦与关闭行为。表单仍需关联标签；Button 在表单内显式指定 `type`。
+- 基础组件位于 `src/shared/ui/components/`，包含 Button、Input、Textarea、Label、Card、Dialog、Table。
+- 组合组件 `CourseCard`、`PageHeading`、`ProgressBar` 等从 `@/shared/ui/primitives` 导入。
+- 教师／学生业务组件保留在各自模块；公共组件不能导入业务服务或凭据。
+- AppShell 已由工作空间路由提供，不在业务页面重复包裹。
+- 平台 Logo 统一复用 `@/shared/ui/brand-logo` 的 `BrandLogo`；SVG 位于 `public/brand-mark.svg`，白色图标搭配深蓝底。
+- 教师导航为 Course Marketplace、My Creations、Teaching Management；创建课程入口放在顶部。窄侧栏支持悬停、聚焦展开和按钮固定。
+- 表单按钮显式写 type；Dialog 提供标题、描述并使用既有 Radix 焦点管理。
 
-## 新增与协作
+## 协作与验证
 
-在项目根目录运行，例如新增下拉选择框：
+UI 负责人协调共享主题和组件；模块成员组合使用。新增组件可运行：
 
 ```bash
 bash scripts/local.sh dlx shadcn@4.21.5 add select
 ```
 
-本次使用官方 CLI 4.21.5 和官方默认 registry。后续升级 CLI 由基建负责人统一处理。新增后检查组件导入、直接依赖与样式；当前 registry 的 Button 使用 `class-variance-authority`，已显式安装。
+不要覆盖已定制组件；新增后审查差异、依赖和主题。提交前运行 lint、typecheck、相关测试及 build，并检查登录、教师／学生页面和窄屏。纯展示变更不添加镜像 DOM 的测试。
 
-基础组件和主题由基建负责人协调维护，成员在各自业务目录中组合使用。课程、班级、进度等业务 UI 留在各自模块；不要把业务服务、角色判断或密钥放进基础组件。不要对已定制的组件直接运行 `--overwrite`，先审查差异。
-
-新增或调整组件后运行 lint、typecheck；涉及共享主题或依赖时运行生产构建，并检查登录页及两端页面的桌面和窄屏布局。组件交互验证使用实际浏览器，无需为静态标记添加重复测试。
-
-## 本次验证（2026-10-17）
-
-- 官方 CLI 4.21.5 已生成七种基础组件，组件依赖与 pnpm 锁文件已更新。
-- ESLint、TypeScript、认证集成测试 12 项通过。测试使用嵌入式 PostgreSQL。
-- 在隔离的源代码副本中执行 Next.js 生产构建（Webpack）通过；副本没有复制 `.env`，未改动正在运行的本地开发服务。
-- 本地开发网页实际使用 `teacher` 账号登录，进入教师工作空间并正常退出。
-- 桌面登录与注册页检查通过；390px 窄屏注册页文档宽度为 390px，表单宽度 340px，无横向溢出。
-- 浏览器未记录 error/warn。未新增真实注册用户，未调用 AI，也未更改数据库结构。
-- 尚未把其他业务页面逐一迁移到新组件；Dialog、Table 等组件已安装，通过类型检查，但未接入业务流程。
+当前仍是功能框架，不将原型演示交互当成真实功能。课程广场使用 Figma 的 6 门展示课程，明确标注 Prototype preview；学科筛选、标题／作者搜索可用。三档难度入口打开未接通说明，不伪造加入或创建成功。My Creations 展示现有真实课程并保留详情、创建、发布流程。封面沿用原型 Unsplash 地址（需要联网），Logo 为本地 SVG；字体使用系统回退。已有课程和用户内容不自动翻译，新 AI 课程与反馈默认英文。

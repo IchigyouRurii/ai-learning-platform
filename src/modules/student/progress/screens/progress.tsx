@@ -19,14 +19,14 @@ export async function StudentProgress() {
     <>
       <PageHeading
         eyebrow="MY LEARNING"
-        title="每一个小进步，都算数。"
-        description="回看你的参与记录，也看看老师留下的建议。"
+        title="Every step counts."
+        description="Review your progress and feedback from your teachers."
       />
       <section className="panel">
-        <h2>正在学习</h2>
+        <h2>In progress</h2>
         {!courses.length ? (
-          <EmptyState title="还没有加入课程">
-            到课程广场选择感兴趣的主题。
+          <EmptyState title="No enrolled courses yet">
+            Visit the marketplace to find a topic that interests you.
           </EmptyState>
         ) : (
           courses.map((course) => {
@@ -42,7 +42,7 @@ export async function StudentProgress() {
                     <h3>{course.title}</h3>
                   </Link>
                   <p className="muted">
-                    {progress.done} / {progress.total} 项任务已提交
+                    {progress.done} / {progress.total} activities submitted
                   </p>
                 </div>
                 <div className="progress-cell">
@@ -53,7 +53,7 @@ export async function StudentProgress() {
                   href={`/student/courses/${course.id}`}
                   className="button secondary"
                 >
-                  继续学习
+                  Continue learning
                 </Link>
               </div>
             );
@@ -64,22 +64,22 @@ export async function StudentProgress() {
         <div className="section-heading">
           <h2>
             <MessageSquareText size={20} />
-            教师反馈
+            Teacher feedback
           </h2>
         </div>
         {!workspace.feedback.length ? (
-          <p className="muted">老师留下建议后，会显示在这里。</p>
+          <p className="muted">Feedback from your teachers will appear here.</p>
         ) : (
           workspace.feedback.toReversed().map((feedback) => (
             <article className="feedback-note" key={feedback.id}>
               <strong>
                 {workspace.courses.find(
                   (course) => course.id === feedback.courseId,
-                )?.title ?? "课程反馈"}
+                )?.title ?? "Course feedback"}
               </strong>
               <p className="prose-text">{feedback.message}</p>
               <small>
-                {new Date(feedback.createdAt).toLocaleDateString("zh-CN", {
+                {new Date(feedback.createdAt).toLocaleDateString("en-US", {
                   timeZone: "Asia/Shanghai",
                 })}
               </small>

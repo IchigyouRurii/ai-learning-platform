@@ -9,7 +9,7 @@ import { generateDraftAction, saveDraftAction } from "../server/actions";
 export function CourseBuilder() {
   const [input, setInput] = useState<GenerationInput>({
     topic: "",
-    audience: "没有编程基础的大学生",
+    audience: "University students with no programming experience",
     goals: "",
     materials: "",
   });
@@ -52,8 +52,8 @@ export function CourseBuilder() {
         <div className="panel-heading">
           <span className="step-number">01</span>
           <div>
-            <h2>告诉我们你想教什么</h2>
-            <p className="muted">目标越清楚，草稿越有帮助。</p>
+            <h2>Define your course</h2>
+            <p className="muted">Clear goals help generate better drafts.</p>
           </div>
         </div>
         <form
@@ -68,18 +68,18 @@ export function CourseBuilder() {
           }}
         >
           <label>
-            课程主题
+            Course topic
             <input
               required
               minLength={2}
               maxLength={200}
               value={input.topic}
               onChange={(event) => update("topic", event.target.value)}
-              placeholder="例如：如何向 AI 编程代理描述需求"
+              placeholder="e.g. Writing requirements for an AI coding agent"
             />
           </label>
           <label>
-            面向谁
+            Target audience
             <input
               required
               minLength={2}
@@ -89,7 +89,7 @@ export function CourseBuilder() {
             />
           </label>
           <label>
-            希望学生学会什么
+            Learning goals
             <textarea
               required
               minLength={2}
@@ -97,17 +97,17 @@ export function CourseBuilder() {
               rows={3}
               value={input.goals}
               onChange={(event) => update("goals", event.target.value)}
-              placeholder="写出具体、可验证的学习目标"
+              placeholder="Describe specific, measurable learning goals"
             />
           </label>
           <label>
-            你的教学材料 <span className="optional">选填</span>
+            Teaching materials <span className="optional">Optional</span>
             <textarea
               maxLength={20000}
               rows={5}
               value={input.materials}
               onChange={(event) => update("materials", event.target.value)}
-              placeholder="粘贴讲义、知识要点或参考内容"
+              placeholder="Paste lecture notes, key concepts, or reference materials"
             />
           </label>
           <button
@@ -116,10 +116,15 @@ export function CourseBuilder() {
             disabled={pending}
           >
             <Sparkles size={16} />
-            {pending ? "正在处理…" : draft ? "重新生成草稿" : "生成课程草稿"}
+            {pending
+              ? "Processing…"
+              : draft
+                ? "Regenerate draft"
+                : "Generate course draft"}
           </button>
           <p className="form-hint">
-            重新生成将替换当前未保存的草稿。AI 输出需要教师审核。
+            Regenerating replaces the unsaved draft. AI content requires teacher
+            review.
           </p>
         </form>
       </section>
@@ -129,24 +134,24 @@ export function CourseBuilder() {
             {draft ? <Check size={15} /> : "02"}
           </span>
           <div>
-            <h2>审核并完善草稿</h2>
-            <p className="muted">加入你的教学经验，再保存。</p>
+            <h2>Review and refine</h2>
+            <p className="muted">Add your expertise before saving.</p>
           </div>
         </div>
         {!draft ? (
           <div className="draft-empty">
             <FileText size={38} strokeWidth={1.2} />
-            <h3>下一门好课，从这里开始</h3>
+            <h3>Your next course starts here</h3>
             <p>
-              填写左侧的主题和目标，
+              Enter a topic and learning goals.
               <br />
-              课程草稿将在这里展开。
+              Your course draft will appear here.
             </p>
           </div>
         ) : (
           <div className="draft-editor">
             <label>
-              课程标题
+              Course title
               <input
                 maxLength={160}
                 value={draft.title}
@@ -156,7 +161,7 @@ export function CourseBuilder() {
               />
             </label>
             <label>
-              课程简介
+              Course description
               <textarea
                 rows={3}
                 maxLength={2000}
@@ -169,7 +174,7 @@ export function CourseBuilder() {
             {draft.lessons.map((lesson, lessonIndex) => (
               <div className="lesson-editor" key={lesson.id}>
                 <label>
-                  第 {lessonIndex + 1} 节
+                  Lesson {lessonIndex + 1}
                   <input
                     value={lesson.title}
                     maxLength={160}
@@ -189,8 +194,8 @@ export function CourseBuilder() {
                   block.type === "text" || block.type === "activity" ? (
                     <label key={block.id}>
                       {block.type === "text"
-                        ? "讲解内容"
-                        : `活动：${block.activity.title}`}
+                        ? "Lesson content"
+                        : `Activity: ${block.activity.title}`}
                       <textarea
                         rows={block.type === "text" ? 5 : 3}
                         value={
@@ -220,7 +225,7 @@ export function CourseBuilder() {
               }}
             >
               <Save size={16} />
-              {pending ? "正在保存…" : "保存为草稿"}
+              {pending ? "Saving…" : "Save draft"}
             </button>
           </div>
         )}

@@ -9,10 +9,14 @@ export function parseGeneratedCourse(raw: string): CourseDraft {
   try {
     parsed = JSON.parse(fenced ? fenced[1] : trimmed);
   } catch {
-    throw new Error("AI 返回的课程不是完整 JSON，请重新生成或更换模型。");
+    throw new Error(
+      "The generated course is not valid JSON. Regenerate or choose another model.",
+    );
   }
   const result = courseDraftSchema.safeParse(parsed);
   if (!result.success)
-    throw new Error("AI 草稿缺少必要字段或内容格式不正确，请重新生成。");
+    throw new Error(
+      "The draft has missing or invalid fields. Please regenerate.",
+    );
   return result.data;
 }

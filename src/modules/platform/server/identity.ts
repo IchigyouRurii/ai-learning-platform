@@ -7,8 +7,8 @@ import { getAppMode, isAuthConfigured } from "@/shared/config";
 import { getAuth } from "./auth";
 
 export const DEMO_USERS: Record<"teacher" | "student", User> = {
-  teacher: { id: "demo-teacher", name: "林老师", role: "teacher" },
-  student: { id: "demo-student", name: "小林", role: "student" },
+  teacher: { id: "demo-teacher", name: "Ethan Lin", role: "teacher" },
+  student: { id: "demo-student", name: "Alex Lin", role: "student" },
 };
 
 export const getSessionUser = cache(async (): Promise<User | null> => {
@@ -32,7 +32,7 @@ export const getSessionUser = cache(async (): Promise<User | null> => {
   if (!session) return null;
   const role = session.user.role;
   if (role !== "teacher" && role !== "student" && role !== "admin")
-    throw new Error("账号身份无效，请联系项目管理员。");
+    throw new Error("Invalid account role. Contact the project administrator.");
   return { id: session.user.id, name: session.user.name, role };
 });
 

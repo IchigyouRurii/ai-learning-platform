@@ -9,13 +9,13 @@ export default async function AdminPage() {
     <>
       <PageHeading
         eyebrow="ADMINISTRATION"
-        title="管理工作空间"
-        description="管理员角色已预留，具体管理功能将在需求确认后添加。"
+        title="Admin workspace"
+        description="The admin role is reserved. Management features are not implemented yet."
       />
       <section className="panel">
-        <p>当前账号已通过身份验证。</p>
+        <p>Your account is authenticated.</p>
         <Link href="/" className="text-link">
-          返回工作空间
+          Back to workspace
         </Link>
       </section>
     </>

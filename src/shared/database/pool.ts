@@ -6,14 +6,14 @@ export function getDatabasePool(): Pool {
   if (runtime.minicoursePostgres) return runtime.minicoursePostgres;
   const connectionString = process.env.DATABASE_URL?.trim();
   if (!connectionString)
-    throw new Error("请先在根目录 .env 填写 DATABASE_URL。");
+    throw new Error("Set DATABASE_URL in the root .env first.");
   try {
     const parsed = new URL(connectionString);
     if (!["postgres:", "postgresql:"].includes(parsed.protocol))
       throw new Error();
   } catch {
     throw new Error(
-      "DATABASE_URL 格式不正确，请复制 Neon Connect 中的 PostgreSQL 连接串。",
+      "Invalid DATABASE_URL. Copy the PostgreSQL connection string from Neon Connect.",
     );
   }
   const pool = new Pool({
@@ -22,7 +22,9 @@ export function getDatabasePool(): Pool {
     idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 10000,
   });
-  pool.on("error", () => console.error("数据库连接暂时不可用。"));
+  pool.on("error", () =>
+    console.error("Database connection is temporarily unavailable."),
+  );
   runtime.minicoursePostgres = pool;
   return pool;
 }
