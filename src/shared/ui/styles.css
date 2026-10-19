@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./tokens.css";
 @import "./legacy.css" layer(components);
+@import "./workspace.css" layer(components);
 
 @custom-variant dark (&:is(.dark *));
 
@@ -43,38 +45,38 @@
 }
 
 :root {
-  --radius: 14px;
-  --background: #f7f8f5;
-  --foreground: #253a33;
+  --radius: 8px;
+  --background: var(--ui-page);
+  --foreground: var(--ui-text);
   --card: #ffffff;
-  --card-foreground: #253a33;
+  --card-foreground: var(--ui-text);
   --popover: #ffffff;
-  --popover-foreground: #253a33;
-  --primary: #285c48;
+  --popover-foreground: var(--ui-text);
+  --primary: var(--ui-primary);
   --primary-foreground: #ffffff;
-  --secondary: #eaf0cf;
-  --secondary-foreground: #285c48;
-  --muted: #f1f4ed;
-  --muted-foreground: #7b8580;
-  --accent: #edf3e8;
-  --accent-foreground: #285c48;
+  --secondary: var(--ui-label-background);
+  --secondary-foreground: var(--ui-primary);
+  --muted: #eef2f8;
+  --muted-foreground: var(--ui-secondary);
+  --accent: var(--ui-link-hover-background);
+  --accent-foreground: var(--ui-primary);
   --destructive: #b54d3e;
-  --border: #e6ebe5;
-  --input: #dfe6db;
-  --ring: #285c48;
-  --chart-1: #285c48;
-  --chart-2: #6a8c60;
-  --chart-3: #8aa7a9;
-  --chart-4: #b7a88c;
-  --chart-5: #a8b95c;
+  --border: var(--ui-border);
+  --input: #8b9ab3;
+  --ring: var(--ui-link);
+  --chart-1: var(--ui-primary);
+  --chart-2: #526b9d;
+  --chart-3: #798cbb;
+  --chart-4: #97a5c5;
+  --chart-5: #bac7dd;
   --sidebar: #ffffff;
-  --sidebar-foreground: #253a33;
-  --sidebar-primary: #285c48;
+  --sidebar-foreground: var(--ui-text);
+  --sidebar-primary: var(--ui-primary);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #edf3e8;
-  --sidebar-accent-foreground: #285c48;
-  --sidebar-border: #e6ebe5;
-  --sidebar-ring: #285c48;
+  --sidebar-accent: var(--ui-label-background);
+  --sidebar-accent-foreground: var(--ui-primary);
+  --sidebar-border: var(--ui-border);
+  --sidebar-ring: var(--ui-link);
 
   /* Compatibility tokens for the existing application screens. */
   --surface: var(--card);
@@ -82,7 +84,7 @@
   --text-muted: var(--muted-foreground);
   --line: var(--border);
   --green: var(--primary);
-  --green-hover: #1d4837;
+  --green-hover: var(--ui-primary-hover);
   --lime: var(--secondary);
 }
 

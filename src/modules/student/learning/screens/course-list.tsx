@@ -21,45 +21,45 @@ export async function StudentCourseList() {
     <>
       <PageHeading
         eyebrow="YOUR LEARNING SPACE"
-        title="带着好奇，开始今天的探索。"
-        description="一点讲解，一次实践。按自己的节奏，把新知识变成自己的能力。"
+        title="Start your next discovery."
+        description="Learn at your own pace through short lessons and practical activities."
       />
       <section className="student-banner">
         <div>
           <span className="eyebrow">SMALL LESSONS. REAL PROGRESS.</span>
           <h2>
-            不需要一次学会所有，
+            One step at a time.
             <br />
-            先完成一个小任务。
+            Start with a small task.
           </h2>
-          <p>选择感兴趣的主题，尝试回答，再从反馈中继续前进。</p>
+          <p>Choose a topic, try an activity, and learn from feedback.</p>
         </div>
         <Compass size={116} strokeWidth={0.65} aria-hidden="true" />
       </section>
       <section className="stats-grid">
         <StatCard
-          label="已加入课程"
+          label="Enrolled courses"
           value={enrolled.size}
-          detail="在学习中找到自己的节奏"
+          detail="Learn at your own pace"
           icon={<BookOpen size={17} />}
         />
         <StatCard
-          label="已完成课程"
+          label="Completed courses"
           value={completed}
-          detail="按互动任务完成情况计算"
+          detail="Based on submitted activities"
           icon={<CheckCheck size={17} />}
         />
         <StatCard
-          label="可探索课程"
+          label="Available courses"
           value={workspace.courses.length}
-          detail="从软件开发与 AI 协作开始"
+          detail="Explore software development and AI collaboration"
           icon={<Compass size={17} />}
         />
       </section>
       <div className="section-heading">
         <div>
-          <h2>发现一门小课</h2>
-          <p className="muted">从真实问题出发，通过实践理解。</p>
+          <h2>Discover a course</h2>
+          <p className="muted">Explore real problems through practice.</p>
         </div>
       </div>
       <section className="course-grid">
@@ -72,8 +72,8 @@ export async function StudentCourseList() {
             footer={
               <span>
                 {enrolled.has(course.id)
-                  ? `已加入 · 完成 ${calculateProgress(course, workspace.submissions, user.id).percent}%`
-                  : "开放加入"}
+                  ? `Enrolled · Completed ${calculateProgress(course, workspace.submissions, user.id).percent}%`
+                  : "Open for enrollment"}
               </span>
             }
           />

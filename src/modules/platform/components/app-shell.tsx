@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { BrandLogo } from "@/shared/ui/brand-logo";
 import {
   ArrowLeftRight,
   FlaskConical,
-  Layers3,
   Sparkles,
   ShieldCheck,
+  Search,
+  Plus,
+  ChevronDown,
 } from "lucide-react";
 import type { User } from "@/shared/contracts";
 import { getAIProvider } from "@/shared/ai/client";
@@ -13,6 +16,7 @@ import { Navigation } from "./navigation";
 import { switchDemoRole } from "../server/actions";
 import { getAppMode } from "@/shared/config";
 import { LogoutButton } from "../auth/logout-button";
+import { WorkspaceSidebar } from "./workspace-sidebar";
 
 export function AppShell({
   user,
@@ -24,82 +28,137 @@ export function AppShell({
   const demo = getAppMode() === "demo";
   const roleName =
     user.role === "teacher"
-      ? "教师端"
+      ? "Teacher"
       : user.role === "admin"
-        ? "管理端"
-        : "学生端";
+        ? "Admin"
+        : "Student";
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell${user.role === "teacher" ? " teacher-shell" : ""}`}
+    >
       <a className="skip-link" href="#main-content">
-        跳到主要内容
+        Skip to main content
       </a>
-      <aside className="sidebar">
+      <WorkspaceSidebar>
         <div className="brand">
-          <span className="brand-mark">
-            <Layers3 size={22} />
-          </span>
+          <BrandLogo />
           <div>
             <strong>
-              小课<span className="brand-dot">.</span>
+              OpenLearnING<span className="brand-dot">.</span>
             </strong>
             <small>MINICOURSE</small>
           </div>
         </div>
-        <div className="workspace-label">
-          {user.role === "teacher"
-            ? "教学工作空间"
-            : user.role === "admin"
-              ? "管理工作空间"
-              : "学习工作空间"}
-        </div>
-        <Navigation role={user.role} />
-        <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <Sparkles size={18} />
-            <strong>从一个问题开始</strong>
-            <p>让每一次学习，都多一点参与。</p>
+        {user.role !== "teacher" && (
+          <div className="workspace-label">
+            {user.role === "admin" ? "Admin workspace" : "Learning workspace"}
           </div>
-          <div className="sidebar-version">Education, made personal.</div>
-        </div>
-      </aside>
+        )}
+        <Navigation role={user.role} />
+        {user.role !== "teacher" && (
+          <div className="sidebar-bottom">
+            <div className="sidebar-note">
+              <Sparkles size={18} />
+              <strong>Start with a question</strong>
+              <p>Learn through practice and participation.</p>
+            </div>
+            <div className="sidebar-version">Education, made personal.</div>
+          </div>
+        )}
+      </WorkspaceSidebar>
       <div className="main-shell">
         <header className="topbar">
-          <div className="breadcrumb">
-            工作空间 <span>/</span> <strong>{roleName}</strong>
-          </div>
+          {user.role === "teacher" ? (
+            <form className="catalog-search" action="/teacher" role="search">
+              <Search size={18} aria-hidden="true" />
+              <label className="sr-only" htmlFor="catalog-search">
+                Search courses or authors
+              </label>
+              <input
+                id="catalog-search"
+                name="q"
+                type="search"
+                placeholder="Search courses or authors"
+                maxLength={200}
+              />
+              <button type="submit" aria-label="Search courses">
+                <Search size={15} />
+              </button>
+            </form>
+          ) : (
+            <div className="breadcrumb">
+              Workspace <span>/</span> <strong>{roleName}</strong>
+            </div>
+          )}
           <div className="topbar-right">
-            <span className="demo-tag">
-              {demo ? <FlaskConical size={13} /> : <ShieldCheck size={13} />}
-              {demo ? "本地演示" : "已登录"}
-            </span>
-            {demo ? (
-              <form action={switchDemoRole}>
-                <input
-                  type="hidden"
-                  name="role"
-                  value={user.role === "teacher" ? "student" : "teacher"}
-                />
-                <button className="role-switch" type="submit">
-                  <ArrowLeftRight size={14} />
-                  <span>切换到{user.role === "teacher" ? "学生" : "教师"}</span>
-                </button>
-              </form>
-            ) : (
-              <LogoutButton />
+            {user.role === "teacher" && (
+              <Link
+                href="/teacher/courses/new"
+                className="button primary create-course-link"
+              >
+                <Plus size={17} />
+                <span>Create Course</span>
+              </Link>
             )}
-            <span className="avatar" title={user.name}>
-              {user.name.slice(0, 1)}
-            </span>
+            <details className="profile-menu">
+              <summary aria-label="Open profile menu" title={user.name}>
+                <span className="avatar">
+                  {user.name
+                    .trim()
+                    .split(/\s+/)
+                    .map((part) => part[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
+                </span>
+                <ChevronDown size={15} />
+              </summary>
+              <div className="profile-menu-panel">
+                <strong>{user.name}</strong>
+                <small>{roleName} workspace</small>
+                <span className="demo-tag">
+                  {demo ? (
+                    <FlaskConical size={13} />
+                  ) : (
+                    <ShieldCheck size={13} />
+                  )}
+                  {demo ? "Local demo" : "Signed in"}
+                </span>
+                {demo ? (
+                  <form action={switchDemoRole}>
+                    <input
+                      type="hidden"
+                      name="role"
+                      value={user.role === "teacher" ? "student" : "teacher"}
+                    />
+                    <button className="role-switch" type="submit">
+                      <ArrowLeftRight size={14} />
+                      <span>
+                        Switch to{" "}
+                        {user.role === "teacher" ? "Student" : "Teacher"}
+                      </span>
+                    </button>
+                  </form>
+                ) : (
+                  <LogoutButton />
+                )}
+              </div>
+            </details>
           </div>
         </header>
         <main id="main-content" className="main-content">
           {children}
         </main>
         <footer className="app-footer">
-          <span>小课 · 把知识变成一次参与</span>
+          <span>OpenLearnING · Learn through participation</span>
           <span>
-            {getAIProvider() === "mock" ? "AI：模拟模式" : "AI：已选择真实服务"}{" "}
-            · {demo ? "演示身份不是真实登录" : "账号与学习记录已关联"}
+            {getAIProvider() === "mock"
+              ? "AI: mock mode"
+              : "AI: live provider selected"}{" "}
+            ·{" "}
+            {demo
+              ? "Demo identity is not authentication"
+              : "Learning records linked to your account"}
           </span>
         </footer>
       </div>
@@ -111,25 +170,26 @@ export function RoleGate({ expected }: { expected: "teacher" | "student" }) {
   if (getAppMode() !== "demo")
     return (
       <div className="empty-state">
-        <h1>此页面需要{expected === "teacher" ? "教师" : "学生"}身份</h1>
+        <h1>This page requires a {expected} account</h1>
         <p className="muted">
-          当前账号没有访问权限。如需调整身份，请联系项目负责人。
+          Your account cannot access this page. Contact your project
+          administrator to request access.
         </p>
         <Link href="/" className="button primary">
-          返回我的工作空间
+          Back to my workspace
         </Link>
       </div>
     );
   return (
     <div className="empty-state">
-      <h1>请切换到{expected === "teacher" ? "教师" : "学生"}身份</h1>
+      <h1>Switch to the {expected} role</h1>
       <p className="muted">
-        本地演示使用两种独立身份，便于检查权限与完整流程。
+        Local demo uses separate identities to check permissions and workflows.
       </p>
       <form action={switchDemoRole}>
         <input type="hidden" name="role" value={expected} />
         <button className="button primary" type="submit">
-          切换演示身份
+          Switch demo identity
         </button>
       </form>
     </div>

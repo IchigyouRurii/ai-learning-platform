@@ -19,20 +19,20 @@ export function LogoutButton() {
           try {
             const result = await authClient.signOut();
             if (result.error) {
-              setError("退出失败，请重试。");
+              setError("Sign-out failed. Please try again.");
               setPending(false);
             } else {
               router.replace("/login");
               router.refresh();
             }
           } catch {
-            setError("连接失败，请重试。");
+            setError("Connection failed. Please try again.");
             setPending(false);
           }
         }}
       >
         <LogOut size={14} />
-        {pending ? "正在退出…" : "退出登录"}
+        {pending ? "Signing out…" : "Sign out"}
       </button>
       {error && <span role="alert">{error}</span>}
     </div>

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BookOpen,
   ChartNoAxesCombined,
   GraduationCap,
-  Plus,
+  FileText,
+  LayoutGrid,
   Users,
 } from "lucide-react";
 import type { Role } from "@/shared/contracts";
@@ -15,23 +15,35 @@ export function Navigation({ role }: { role: Role }) {
   const pathname = usePathname();
   const links =
     role === "admin"
-      ? [{ href: "/admin", label: "管理概览", icon: Users }]
+      ? [{ href: "/admin", label: "Admin overview", icon: Users }]
       : role === "teacher"
         ? [
-            { href: "/teacher", label: "我的课程", icon: BookOpen },
-            { href: "/teacher/courses/new", label: "创建课程", icon: Plus },
-            { href: "/teacher/students", label: "学生与反馈", icon: Users },
+            { href: "/teacher", label: "Course Marketplace", icon: LayoutGrid },
+            {
+              href: "/teacher/creations",
+              label: "My Creations",
+              icon: FileText,
+            },
+            {
+              href: "/teacher/students",
+              label: "Teaching Management",
+              icon: Users,
+            },
           ]
         : [
-            { href: "/student", label: "发现课程", icon: GraduationCap },
+            {
+              href: "/student",
+              label: "Course Marketplace",
+              icon: GraduationCap,
+            },
             {
               href: "/student/progress",
-              label: "我的学习",
+              label: "My Learning",
               icon: ChartNoAxesCombined,
             },
           ];
   return (
-    <nav className="navigation" aria-label="主导航">
+    <nav className="navigation" aria-label="Primary navigation">
       {links.map(({ href, label, icon: Icon }) => {
         const active =
           href === "/teacher" || href === "/student"
@@ -41,11 +53,13 @@ export function Navigation({ role }: { role: Role }) {
           <Link
             key={href}
             href={href}
+            title={label}
+            aria-label={label}
             className={active ? "nav-item active" : "nav-item"}
             aria-current={active ? "page" : undefined}
           >
             <Icon size={18} />
-            <span>{label}</span>
+            <span className="nav-label">{label}</span>
             {active && <span className="nav-dot" />}
           </Link>
         );

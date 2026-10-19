@@ -16,7 +16,7 @@ export async function generateCourse(
   if (getAIProvider() === "mock") {
     return courseDraftSchema.parse({
       title: input.topic,
-      description: `为${input.audience}准备的入门微课程。以下为模拟草稿，请教师补充准确的知识内容后发布。`,
+      description: `An introductory micro-course for ${input.audience}. This is a mock draft; the teacher must add accurate content before publishing.`,
       subject: input.topic,
       audience: input.audience,
       goals: input.goals
@@ -26,12 +26,12 @@ export async function generateCourse(
       lessons: [
         {
           id: "lesson-1",
-          title: "认识问题与学习目标",
+          title: "Understand the problem and learning goals",
           blocks: [
             {
               id: "intro-1",
               type: "text",
-              body: `本节围绕「${input.topic}」展开。\n\n学习目标：${input.goals}\n\n${input.materials ? `教师提供的参考材料：\n${input.materials.slice(0, 3000)}` : "请在此补充概念解释、例子与参考资料。"}\n\n这是本地模拟生成，用来验证课程制作流程，不代表真实 AI 的知识输出。`,
+              body: `This lesson explores ${input.topic}.\n\nLearning goals: ${input.goals}\n\n${input.materials ? `Teacher reference materials:\n${input.materials.slice(0, 3000)}` : "Add concept explanations, examples, and references here."}\n\nThis is a local mock draft for testing the workflow, not a response from a live AI model.`,
             },
             {
               id: "task-1",
@@ -39,22 +39,22 @@ export async function generateCourse(
               activity: {
                 id: "activity-1",
                 type: "reflection",
-                title: "联系自己的场景",
-                prompt: `结合自己的背景，描述一个需要运用「${input.topic}」的场景，并说明想解决什么问题。`,
+                title: "Connect to your own experience",
+                prompt: `Describe a situation where you would use ${input.topic}, and explain the problem you want to solve.`,
                 rubric:
-                  "具体说明背景、问题和预期结果，反馈要鼓励学习者进一步解释。",
+                  "Describe the context, problem, and expected result. Feedback should encourage further explanation.",
               },
             },
           ],
         },
         {
           id: "lesson-2",
-          title: "实践与检验",
+          title: "Practice and validation",
           blocks: [
             {
               id: "intro-2",
               type: "text",
-              body: "把刚才的问题拆成一个可以执行的小任务。先说明条件，再提出方案，最后想一想怎样检查结果。\n\n教师可以在这里补充学科相关的操作步骤和示例。",
+              body: "Break the problem into a small actionable task. State the conditions, propose an approach, and explain how to check the result.\n\nTeachers can add subject-specific steps and examples here.",
             },
             {
               id: "task-2",
@@ -62,10 +62,11 @@ export async function generateCourse(
               activity: {
                 id: "activity-2",
                 type: "reflection",
-                title: "提出一个可验证的方案",
-                prompt: "针对上一节的场景，给出你的解决步骤和验证方法。",
+                title: "Propose a testable approach",
+                prompt:
+                  "For the previous scenario, describe your steps and how you would validate the result.",
                 rubric:
-                  "关注步骤是否清楚、验证方法是否可执行；给出下一步提示。",
+                  "Check that the steps are clear and validation is feasible. Suggest a next step.",
               },
             },
           ],

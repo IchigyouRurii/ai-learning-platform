@@ -11,7 +11,9 @@ export function createDemoRepository(filePath: string): Repository {
     try {
       const state = JSON.parse(await readFile(filePath, "utf8")) as DemoState;
       if (state.schemaVersion !== 1)
-        throw new Error("本地数据版本不兼容，请先备份 .local 目录。");
+        throw new Error(
+          "Incompatible local data version. Back up the .local directory first.",
+        );
       return state;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;

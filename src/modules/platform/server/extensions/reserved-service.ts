@@ -28,24 +28,28 @@ export function createReservedService<
         input: unknown,
       ): Promise<FeatureResult<never>> => {
         if (!actor)
-          return { ok: false, code: "AUTH_REQUIRED", error: "请先登录。" };
+          return {
+            ok: false,
+            code: "AUTH_REQUIRED",
+            error: "Please sign in first.",
+          };
         if (!definition.roles.includes(actor.role))
           return {
             ok: false,
             code: "FORBIDDEN",
-            error: "当前角色无权执行此操作。",
+            error: "Your role cannot perform this action.",
           };
         const parsed = definition.input.safeParse(input);
         if (!parsed.success)
           return {
             ok: false,
             code: "INVALID_INPUT",
-            error: parsed.error.issues[0]?.message ?? "输入格式不正确。",
+            error: parsed.error.issues[0]?.message ?? "Invalid input format.",
           };
         return {
           ok: false,
           code: "NOT_IMPLEMENTED",
-          error: `功能 ${namespace}.${name} 的接口已预留，尚未实现。`,
+          error: `Feature ${namespace}.${name} is reserved and not implemented yet.`,
         };
       },
     ]),

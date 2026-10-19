@@ -42,7 +42,9 @@ describe("platform permissions and learning lifecycle", () => {
         (course) => course.id === draft.id,
       ),
     ).toBe(false);
-    await expect(enrollCourse(student, draft.id)).rejects.toThrow("不可加入");
+    await expect(enrollCourse(student, draft.id)).rejects.toThrow(
+      "not open for enrollment",
+    );
     await publishCourse(teacher, draft.id);
     await enrollCourse(student, draft.id);
     expect(
@@ -53,14 +55,16 @@ describe("platform permissions and learning lifecycle", () => {
   });
   it("prevents students from creating or publishing teacher courses", async () => {
     await expect(createCourse(student, state.courses[0])).rejects.toThrow(
-      "教师",
+      "teacher",
     );
-    await expect(publishCourse(student, "ai-coding")).rejects.toThrow("教师");
+    await expect(publishCourse(student, "ai-coding")).rejects.toThrow(
+      "teacher",
+    );
   });
   it("prevents one teacher from publishing another teacher's course", async () => {
     await expect(
       publishCourse({ ...teacher, id: "other-teacher" }, "ai-coding"),
-    ).rejects.toThrow("权限");
+    ).rejects.toThrow("permission");
   });
   it("requires enrollment and validates that the activity belongs to the course", async () => {
     await expect(
@@ -69,10 +73,10 @@ describe("platform permissions and learning lifecycle", () => {
         "product-skills",
         "product-skills-activity-1",
       ),
-    ).rejects.toThrow("加入");
+    ).rejects.toThrow("enroll");
     await expect(
       getLearningContext(student, "ai-coding", "product-skills-activity-1"),
-    ).rejects.toThrow("不属于");
+    ).rejects.toThrow("does not belong");
   });
   it("joining twice does not duplicate the course membership", async () => {
     await Promise.all([
@@ -119,14 +123,14 @@ describe("platform permissions and learning lifecycle", () => {
       answer: "A concrete response",
       aiFeedback: "Feedback",
     };
-    await expect(recordSubmission(student, input)).rejects.toThrow("版本");
+    await expect(recordSubmission(student, input)).rejects.toThrow("version");
     await expect(
       recordSubmission(student, {
         ...input,
         courseVersion: 1,
         activityId: "fake",
       }),
-    ).rejects.toThrow("版本");
+    ).rejects.toThrow("version");
     expect(state.submissions).toHaveLength(0);
   });
   it("teacher feedback is restricted to their own course and actual members", async () => {
@@ -137,10 +141,10 @@ describe("platform permissions and learning lifecycle", () => {
         student.id,
         "Hello",
       ),
-    ).rejects.toThrow("权限");
+    ).rejects.toThrow("permission");
     await expect(
       addTeacherFeedback(teacher, "ai-coding", "unknown-student", "Hello"),
-    ).rejects.toThrow("不在课程");
+    ).rejects.toThrow("not enrolled");
     await addTeacherFeedback(
       teacher,
       "ai-coding",

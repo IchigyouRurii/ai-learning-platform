@@ -66,12 +66,18 @@ export const courseDraftSchema = z
     const activityIds = new Set<string>();
     for (const lesson of course.lessons) {
       if (lessonIds.has(lesson.id))
-        context.addIssue({ code: "custom", message: "章节 ID 不能重复" });
+        context.addIssue({
+          code: "custom",
+          message: "Lesson IDs must be unique",
+        });
       lessonIds.add(lesson.id);
       for (const block of lesson.blocks) {
         if (block.type === "activity") {
           if (activityIds.has(block.activity.id))
-            context.addIssue({ code: "custom", message: "活动 ID 不能重复" });
+            context.addIssue({
+              code: "custom",
+              message: "Activity IDs must be unique",
+            });
           activityIds.add(block.activity.id);
         }
       }
@@ -79,7 +85,11 @@ export const courseDraftSchema = z
   });
 
 export const generationInputSchema = z.object({
-  topic: z.string().trim().min(2, "请输入至少两个字符的主题").max(200),
+  topic: z
+    .string()
+    .trim()
+    .min(2, "Enter a topic with at least two characters")
+    .max(200),
   audience: z.string().trim().min(2).max(500),
   goals: z.string().trim().min(2).max(2000),
   materials: z.string().trim().max(20000).default(""),

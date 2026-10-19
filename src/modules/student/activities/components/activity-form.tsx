@@ -16,7 +16,7 @@ export function ActivityForm({
 }) {
   const [answer, setAnswer] = useState(latest?.answer ?? "");
   const [feedback, setFeedback] = useState(latest?.aiFeedback ?? "");
-  const [background, setBackground] = useState("非计算机专业，刚开始接触");
+  const [background, setBackground] = useState("Non-CS beginner");
   const [goal, setGoal] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -54,28 +54,28 @@ export function ActivityForm({
       >
         <div className="form-two-columns">
           <label>
-            我的学习背景
+            My background
             <select
               value={background}
               onChange={(event) => setBackground(event.target.value)}
             >
-              <option>非计算机专业，刚开始接触</option>
-              <option>计算机专业，希望深入理解</option>
-              <option>已有实践经验，准备求职</option>
+              <option>Non-CS beginner</option>
+              <option>CS student seeking deeper understanding</option>
+              <option>Experienced learner preparing for a career</option>
             </select>
           </label>
           <label>
-            这次想学会什么 <span className="optional">选填</span>
+            My learning goal <span className="optional">Optional</span>
             <input
               maxLength={500}
               value={goal}
               onChange={(event) => setGoal(event.target.value)}
-              placeholder="例如：把需求描述得更清楚"
+              placeholder="e.g. Describe requirements more clearly"
             />
           </label>
         </div>
         <label>
-          写下你的想法
+          Your answer
           <textarea
             required
             minLength={10}
@@ -83,16 +83,16 @@ export function ActivityForm({
             rows={5}
             value={answer}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="试着给出具体场景，并解释你的判断……"
+            placeholder="Describe a specific situation and explain your reasoning…"
           />
         </label>
         <div className="form-bottom">
           <span className="form-hint">
-            提交后保存学习记录，可继续修改并重试。
+            Your submission is saved. You can revise and resubmit.
           </span>
           <button className="button primary" disabled={pending} type="submit">
             <Send size={14} />
-            {pending ? "正在生成反馈…" : "提交并获取反馈"}
+            {pending ? "Generating feedback…" : "Submit for feedback"}
           </button>
         </div>
       </form>
@@ -105,7 +105,7 @@ export function ActivityForm({
         <div className="ai-feedback" role="status">
           <div>
             <Sparkles size={16} />
-            <strong>学习反馈</strong>
+            <strong>Learning feedback</strong>
           </div>
           <p className="prose-text">{feedback}</p>
         </div>

@@ -10,8 +10,8 @@ import { authClient } from "./auth-client";
 import { resolveLoginEmail } from "./login-identifier";
 
 const inputClassName =
-  "h-12 rounded-[7px] bg-white text-xs shadow-none md:text-xs";
-const labelClassName = "text-xs leading-normal text-[#5f7163]";
+  "h-11 rounded-lg bg-white text-sm shadow-none md:text-sm";
+const labelClassName = "text-sm leading-normal text-foreground";
 
 export function AuthForm({
   mode,
@@ -30,16 +30,21 @@ export function AuthForm({
         <p className="eyebrow">
           {register ? "START YOUR JOURNEY" : "WELCOME BACK"}
         </p>
-        <h1>{register ? "创建你的学习账号" : "欢迎回到小课"}</h1>
+        <h1>
+          {register
+            ? "Create your learning account"
+            : "Welcome back to OpenLearnING"}
+        </h1>
         <p className="muted">
           {register
-            ? "用一次次尝试，积累属于自己的进步。"
-            : "继续你的学习旅程，或开始设计下一门好课。"}
+            ? "Build your progress, one step at a time."
+            : "Continue learning or start creating your next course."}
         </p>
       </div>
       {!configured && (
         <div className="auth-notice" role="status">
-          项目尚未完成数据库配置，请先按项目说明连接 Neon 并初始化数据库。
+          Database setup is incomplete. Follow the setup guide to connect Neon
+          and initialize the database.
         </div>
       )}
       <form
@@ -63,15 +68,15 @@ export function AuthForm({
               const code = result.error.code;
               setError(
                 code === "INVALID_EMAIL_OR_PASSWORD"
-                  ? "账号或密码不正确。"
+                  ? "Incorrect account or password."
                   : code === "USER_ALREADY_EXISTS" ||
                       code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
-                    ? "该邮箱已注册，请直接登录。"
+                    ? "This email is already registered. Please sign in."
                     : code === "PASSWORD_TOO_SHORT"
-                      ? "密码至少需要 10 个字符。"
+                      ? "Your password must contain at least 10 characters."
                       : result.error.status === 429
-                        ? "尝试次数较多，请稍后再试。"
-                        : "暂时无法完成操作，请检查信息或稍后重试。",
+                        ? "Too many attempts. Please try again later."
+                        : "Unable to complete this action. Check your details or try again later.",
               );
               setPending(false);
             } else {
@@ -79,7 +84,9 @@ export function AuthForm({
               router.refresh();
             }
           } catch {
-            setError("暂时无法连接登录服务，请稍后重试。");
+            setError(
+              "Unable to connect to the sign-in service. Please try again later.",
+            );
             setPending(false);
           }
         }}
@@ -87,7 +94,7 @@ export function AuthForm({
         {register && (
           <div className="mb-[18px] grid gap-[7px]">
             <Label htmlFor="auth-name" className={labelClassName}>
-              你的称呼
+              Your name
             </Label>
             <Input
               id="auth-name"
@@ -98,13 +105,13 @@ export function AuthForm({
               minLength={1}
               maxLength={80}
               disabled={!configured || pending}
-              placeholder="希望大家如何称呼你"
+              placeholder="Enter your name"
             />
           </div>
         )}
         <div className="mb-[18px] grid gap-[7px]">
           <Label htmlFor="auth-email" className={labelClassName}>
-            {register ? "邮箱" : "账号或邮箱"}
+            {register ? "Email" : "Account or email"}
           </Label>
           <Input
             id="auth-email"
@@ -115,12 +122,14 @@ export function AuthForm({
             required
             maxLength={254}
             disabled={!configured || pending}
-            placeholder={register ? "you@example.com" : "输入账号或邮箱"}
+            placeholder={
+              register ? "you@example.com" : "Enter your account or email"
+            }
           />
         </div>
         <div className="mb-[18px] grid gap-[7px]">
           <Label htmlFor="auth-password" className={labelClassName}>
-            密码
+            Password
           </Label>
           <Input
             id="auth-password"
@@ -132,7 +141,9 @@ export function AuthForm({
             minLength={register ? 10 : 1}
             maxLength={128}
             disabled={!configured || pending}
-            placeholder={register ? "至少 10 个字符" : "输入你的密码"}
+            placeholder={
+              register ? "At least 10 characters" : "Enter your password"
+            }
           />
         </div>
         {error && (
@@ -141,7 +152,7 @@ export function AuthForm({
           </p>
         )}
         <Button
-          className="auth-submit h-11 w-full rounded-[7px] text-xs"
+          className="auth-submit h-11 w-full rounded-lg text-sm"
           type="submit"
           disabled={!configured || pending}
         >
@@ -150,18 +161,19 @@ export function AuthForm({
           ) : (
             <ArrowRight size={16} />
           )}
-          {pending ? "正在处理…" : register ? "创建账号" : "登录"}
+          {pending ? "Processing…" : register ? "Create account" : "Sign in"}
         </Button>
       </form>
       <p className="auth-switch">
-        {register ? "已有账号？" : "还没有账号？"}
+        {register ? "Already have an account? " : "New here? "}
         <Link href={register ? "/login" : "/register"}>
-          {register ? "前往登录" : "创建账号"}
+          {register ? "Sign in" : "Create account"}
         </Link>
       </p>
       {register && (
         <p className="form-hint">
-          新账号默认为学生。教师身份由项目负责人分配。
+          New accounts are students by default. Teacher access is assigned by
+          the project administrator.
         </p>
       )}
     </>

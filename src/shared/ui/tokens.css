@@ -1,0 +1,68 @@
+/* UI tokens extracted from the supplied Figma source, v2.
+ * Active shared theme. Imported by styles.css and mapped to semantic tokens.
+ * Import once in global CSS, then explicitly use variables in shared components.
+ * This file intentionally does not reset global elements or change existing UI.
+ */
+:root {
+  --ui-font:
+    Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", system-ui,
+    sans-serif;
+  --ui-page: #f5f7fb;
+  --ui-content-background:
+    radial-gradient(
+      circle at 80% 0%,
+      rgba(221, 228, 241, 0.72),
+      transparent 34%
+    ),
+    linear-gradient(135deg, #f8f9fc 0%, #f2f5fa 100%);
+  --ui-text: #17213a;
+  --ui-title: #111c35;
+  --ui-secondary: #61718a;
+  --ui-description: #61718a;
+  --ui-author: #61718a;
+  --ui-primary: #1c2f64;
+  --ui-primary-background: rgba(28, 47, 100, 0.9);
+  --ui-primary-hover: #142653;
+  --ui-link: #244b8e;
+  --ui-link-hover: #0d4cb4;
+  --ui-link-hover-background: #f2f6fc;
+  --ui-label-background: #edf2fb;
+  --ui-label-text: #315b9c;
+  --ui-filter-active: #1f356f;
+  --ui-filter-border: #d9dee8;
+  --ui-filter-text: #4e5b70;
+  --ui-border: #e9edf4;
+  --ui-surface: #fff;
+  --ui-card-background: rgba(255, 255, 255, 0.9);
+  --ui-card-border: rgba(255, 255, 255, 0.8);
+  --ui-header-background: rgba(255, 255, 255, 0.65);
+  --ui-sidebar-background: rgba(255, 255, 255, 0.55);
+  --ui-header-height: 60px;
+  --ui-sidebar-width: 64px;
+  --ui-sidebar-expanded-width: 228px;
+  --ui-content-max: 1600px;
+  --ui-page-padding: 24px;
+  --ui-page-padding-wide: 28px;
+  --ui-grid-gap: 20px;
+  --ui-cover-height: 142px;
+  --ui-card-padding-x: 20px;
+  --ui-card-padding-y: 16px;
+  --ui-difficulty-height: 48px;
+  --ui-control-height: 36px;
+  --ui-card-radius: 18px;
+  --ui-control-radius: 8px;
+  --ui-dialog-radius: 16px;
+  --ui-pill-radius: 9999px;
+  --ui-card-shadow: 0 14px 38px rgba(33, 49, 87, 0.07);
+  --ui-card-shadow-hover: 0 22px 50px rgba(33, 49, 87, 0.13);
+  --ui-button-shadow: 0 6px 16px rgba(28, 47, 100, 0.16);
+  --ui-filter-shadow: 0 7px 16px rgba(31, 53, 111, 0.16);
+  --ui-dialog-shadow: 0 28px 80px rgba(20, 32, 58, 0.22);
+  --ui-duration: 300ms;
+  --ui-page-title-size: 30px;
+  --ui-page-subtitle-size: 15px;
+  --ui-card-title-size: 19px;
+  --ui-body-size: 14px;
+  --ui-author-size: 13px;
+  --ui-label-size: 12px;
+}

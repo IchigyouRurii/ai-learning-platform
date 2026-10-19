@@ -21,18 +21,20 @@ export async function TeacherStudents() {
     <>
       <PageHeading
         eyebrow="PARTICIPATION & FEEDBACK"
-        title="看见参与，也回应每一次尝试。"
-        description="查看课程成员和任务提交情况，为学生提供下一步建议。"
+        title="Teaching Management"
+        description="Review course participation and submissions, and guide each learner."
       />
       <div className="inline-note">
         <Users size={17} />
         <span>
-          学生加入课程后，参与情况会显示在这里。完成度按已提交的互动任务计算。
+          Participation appears here after enrollment. Progress is based on
+          submitted activities.
         </span>
       </div>
       {!workspace.enrollments.length ? (
-        <EmptyState title="还没有学生加入">
-          发布课程后，切换到学生身份加入并提交一次活动。
+        <EmptyState title="No students enrolled yet">
+          Publish a course to start receiving enrollments and activity
+          submissions.
         </EmptyState>
       ) : (
         workspace.enrollments.map((enrollment) => {
@@ -63,38 +65,40 @@ export async function TeacherStudents() {
             >
               <div className="learner-header">
                 <div className="learner-name">
-                  <span className="avatar">学</span>
+                  <span className="avatar">S</span>
                   <div>
                     <h3>
                       {workspace.members.find(
                         (member) => member.id === enrollment.studentId,
-                      )?.name ?? "学生"}
+                      )?.name ?? "Student"}
                     </h3>
                     <p className="muted">{course.title}</p>
                   </div>
                 </div>
                 <Badge tone={progress.percent === 100 ? "green" : "neutral"}>
-                  {progress.percent === 100 ? "任务已提交" : "学习中"}
+                  {progress.percent === 100
+                    ? "Activities submitted"
+                    : "In progress"}
                 </Badge>
               </div>
               <div className="learner-progress">
                 <ProgressBar percent={progress.percent} />
                 <span>
-                  {progress.done} / {progress.total} 项任务
+                  {progress.done} / {progress.total} activities
                 </span>
               </div>
               {latestByActivity.length ? (
                 latestByActivity.map((submission) => (
                   <details className="submission-detail" key={submission.id}>
-                    <summary>查看最近的回答与学习反馈</summary>
-                    <h4>学生回答</h4>
+                    <summary>View latest answers and feedback</summary>
+                    <h4>Student answer</h4>
                     <p className="prose-text">{submission.answer}</p>
-                    <h4>学习反馈</h4>
+                    <h4>Learning feedback</h4>
                     <p className="prose-text muted">{submission.aiFeedback}</p>
                   </details>
                 ))
               ) : (
-                <p className="muted">学生已加入，暂未提交活动。</p>
+                <p className="muted">Enrolled; no activities submitted yet.</p>
               )}
               <FeedbackForm
                 courseId={course.id}
