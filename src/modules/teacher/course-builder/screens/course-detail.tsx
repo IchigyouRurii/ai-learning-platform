@@ -14,9 +14,9 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
   if (!course) notFound();
   return (
     <>
-      <Link href="/teacher" className="back-link">
+      <Link href="/teacher/creations" className="back-link">
         <ArrowLeft size={15} />
-        返回我的课程
+        Back to My Creations
       </Link>
       <PageHeading
         eyebrow="COURSE PREVIEW"
@@ -24,7 +24,7 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
         description={course.description}
         action={
           <Badge tone={course.status === "published" ? "green" : "amber"}>
-            {course.status === "published" ? "已发布" : "待发布草稿"}
+            {course.status === "published" ? "Published" : "Unpublished draft"}
           </Badge>
         }
       />
@@ -43,17 +43,17 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
                   </p>
                 ) : block.type === "activity" ? (
                   <div className="activity-preview" key={block.id}>
-                    <Badge>互动任务</Badge>
+                    <Badge>Activities</Badge>
                     <h3>{block.activity.title}</h3>
                     <p>{block.activity.prompt}</p>
                     <details>
-                      <summary>查看评价标准</summary>
+                      <summary>View assessment criteria</summary>
                       <p className="muted">{block.activity.rubric}</p>
                     </details>
                   </div>
                 ) : (
                   <p className="muted" key={block.id}>
-                    媒体内容：{block.type}（渲染器待接入）
+                    Media: {block.type}(renderer not yet available)
                   </p>
                 ),
               )}
@@ -62,26 +62,28 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
         </div>
         <aside className="panel course-summary">
           <p className="eyebrow">COURSE NOTES</p>
-          <h3>学习目标</h3>
+          <h3>Learning goals</h3>
           <ul>
             {course.goals.map((goal, index) => (
               <li key={index}>{goal}</li>
             ))}
           </ul>
           <hr />
-          <h3>目标学习者</h3>
+          <h3>Target audience</h3>
           <p className="muted">{course.audience}</p>
           <hr />
           {course.status === "draft" ? (
             <>
               <p className="form-hint">
-                请确认内容准确，且任务适合学习者，再发布课程。
+                Check content accuracy and activity suitability before
+                publishing.
               </p>
               <PublishButton courseId={course.id} />
             </>
           ) : (
             <p className="muted">
-              课程已在学生端开放。可在右上角切换身份体验。
+              This course is available to students. Demo users can switch roles
+              in the header.
             </p>
           )}
         </aside>

@@ -2,12 +2,13 @@
 export default function ErrorPage({ reset }: { reset: () => void }) {
   return (
     <div className="empty-state">
-      <h1>暂时无法加载</h1>
+      <h1>Unable to load this page</h1>
       <p className="muted">
-        请稍后重试。如果刚修改了配置，请检查服务端终端中的提示。
+        Please try again. If you changed configuration, check the server
+        terminal for details.
       </p>
       <button className="button primary" onClick={reset}>
-        重新加载
+        Reload
       </button>
     </div>
   );

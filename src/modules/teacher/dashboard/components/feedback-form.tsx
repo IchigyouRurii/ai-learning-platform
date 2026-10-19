@@ -23,7 +23,7 @@ export function FeedbackForm({
         startTransition(async () => {
           const result = await sendFeedbackAction(courseId, studentId, message);
           if (result.ok) {
-            setStatus("反馈已发送，学生可在「我的学习」查看。");
+            setStatus("Feedback sent. The student can view it in My Learning.");
             setMessage("");
             router.refresh();
           } else setStatus(result.error);
@@ -31,7 +31,7 @@ export function FeedbackForm({
       }}
     >
       <label>
-        给学生留一句建议
+        Feedback for the student
         <textarea
           required
           minLength={2}
@@ -39,11 +39,11 @@ export function FeedbackForm({
           rows={2}
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder="结合学生的回答，给出具体、可执行的下一步……"
+          placeholder="Suggest a specific next step based on the answer…"
         />
       </label>
       <button className="button secondary" disabled={pending}>
-        {pending ? "发送中…" : "发送反馈"}
+        {pending ? "Sending…" : "Send feedback"}
       </button>
       {status && (
         <p className="form-hint" role="status">

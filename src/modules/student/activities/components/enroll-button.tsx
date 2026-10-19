@@ -21,7 +21,7 @@ export function EnrollButton({ courseId }: { courseId: string }) {
           })
         }
       >
-        {pending ? "正在加入…" : "加入课程，开始学习"}
+        {pending ? "Enrolling…" : "Enroll and start learning"}
       </button>
       {error && (
         <p className="error-text" role="alert">

@@ -23,7 +23,7 @@ export function createLocalPlatformRepository(
       ].map((id) => ({
         id,
         role: "student" as const,
-        name: id === "demo-student" ? "小林" : "学生",
+        name: id === "demo-student" ? "Alex Lin" : "Student",
       }));
       return {
         ...state,
@@ -63,7 +63,7 @@ export function createLocalPlatformRepository(
         const course = state.courses.find(
           (item) => item.id === courseId && item.ownerId === ownerId,
         );
-        if (!course) throw new Error("课程不存在或没有管理权限。");
+        if (!course) throw new Error("Course not found or access denied.");
         course.status = "published";
         course.updatedAt = new Date().toISOString();
         return course;
@@ -79,7 +79,7 @@ export function createLocalPlatformRepository(
               course.visibility === "cohort",
           )
         )
-          throw new Error("课程不可加入。");
+          throw new Error("This course is not open for enrollment.");
         if (
           !state.enrollments.some(
             (item) =>
@@ -106,7 +106,9 @@ export function createLocalPlatformRepository(
             (item) => item.id === submission.activityId,
           )
         )
-          throw new Error("课程版本或活动已变化，请刷新后重试。");
+          throw new Error(
+            "The course version or activity has changed. Refresh and try again.",
+          );
         if (
           !state.enrollments.some(
             (item) =>
@@ -114,7 +116,7 @@ export function createLocalPlatformRepository(
               item.studentId === submission.studentId,
           )
         )
-          throw new Error("请先加入这门课程。");
+          throw new Error("Please enroll in this course first.");
         state.submissions.push(submission);
         return submission;
       });
@@ -128,7 +130,7 @@ export function createLocalPlatformRepository(
               course.ownerId === feedback.teacherId,
           )
         )
-          throw new Error("没有管理权限。");
+          throw new Error("Access denied.");
         if (
           !state.enrollments.some(
             (item) =>
@@ -136,7 +138,7 @@ export function createLocalPlatformRepository(
               item.studentId === feedback.studentId,
           )
         )
-          throw new Error("学生不在课程中。");
+          throw new Error("The student is not enrolled in this course.");
         state.feedback.push(feedback);
       });
     },

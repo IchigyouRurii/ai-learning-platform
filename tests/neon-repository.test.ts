@@ -61,7 +61,7 @@ describe("Neon SQL repository", () => {
     expect((await repository.getWorkspace(student)).courses).toHaveLength(0);
     await expect(
       repository.publishCourse("course-1", "other-teacher"),
-    ).rejects.toThrow("权限");
+    ).rejects.toThrow(/access denied/i);
     await repository.publishCourse("course-1", teacher.id);
     await repository.publishCourse("course-1", teacher.id);
     expect(
@@ -82,7 +82,7 @@ describe("Neon SQL repository", () => {
     await repository.insertCourse(draft());
     await repository.publishCourse("course-1", teacher.id);
     await expect(repository.insertSubmission(submission())).rejects.toThrow(
-      "加入关系",
+      "enrollment",
     );
     await repository.enroll("course-1", student.id);
     await repository.enroll("course-1", student.id);
@@ -91,10 +91,10 @@ describe("Neon SQL repository", () => {
     );
     await expect(
       repository.insertSubmission({ ...submission(), courseVersion: 2 }),
-    ).rejects.toThrow("版本");
+    ).rejects.toThrow("course, activity, or enrollment");
     await expect(
       repository.insertSubmission({ ...submission(), activityId: "forged" }),
-    ).rejects.toThrow("活动");
+    ).rejects.toThrow("course, activity, or enrollment");
     await repository.insertSubmission(submission());
     expect((await repository.getWorkspace(student)).submissions).toHaveLength(
       1,
@@ -117,7 +117,7 @@ describe("Neon SQL repository", () => {
     };
     await expect(
       repository.insertFeedback({ ...feedback, teacherId: "other-teacher" }),
-    ).rejects.toThrow("权限");
+    ).rejects.toThrow(/access denied/i);
     await repository.insertFeedback(feedback);
     expect((await repository.getWorkspace(student)).feedback).toHaveLength(1);
     expect((await repository.getWorkspace(otherStudent)).feedback).toHaveLength(

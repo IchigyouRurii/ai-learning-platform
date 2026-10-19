@@ -1,4 +1,5 @@
-import { Layers3, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { BrandLogo } from "@/shared/ui/brand-logo";
 
 export default function AuthLayout({
   children,
@@ -9,12 +10,10 @@ export default function AuthLayout({
     <main className="auth-page">
       <section className="auth-story">
         <div className="brand">
-          <span className="brand-mark">
-            <Layers3 size={24} />
-          </span>
+          <BrandLogo />
           <div>
             <strong>
-              小课<span className="brand-dot">.</span>
+              OpenLearnING<span className="brand-dot">.</span>
             </strong>
             <small>MINICOURSE</small>
           </div>
@@ -22,14 +21,14 @@ export default function AuthLayout({
         <div className="auth-story-copy">
           <span className="eyebrow">A LITTLE CURIOSITY GOES A LONG WAY</span>
           <h2>
-            每一个好问题，
+            Every good question
             <br />
-            都是学习的开始。
+            starts a learning journey.
           </h2>
           <p>
-            在实践中探索，在反馈中成长。
+            Explore through practice. Grow through feedback.
             <br />
-            让知识，成为你自己的能力。
+            Turn knowledge into skills of your own.
           </p>
           <div className="auth-story-art" aria-hidden="true">
             ✳
@@ -42,7 +41,9 @@ export default function AuthLayout({
       </section>
       <section className="auth-form-section">
         <div className="auth-form-card">{children}</div>
-        <p className="auth-footer">小课 · 把知识变成一次参与</p>
+        <p className="auth-footer">
+          OpenLearnING · Learn through participation
+        </p>
       </section>
     </main>
   );

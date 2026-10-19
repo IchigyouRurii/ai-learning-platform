@@ -11,7 +11,7 @@ export function getAIProvider(): Provider {
     provider !== "openrouter"
   )
     throw new Error(
-      "AI_PROVIDER 只能为 mock、openrouter 或 openai-compatible。",
+      "AI_PROVIDER must be mock, openrouter, or openai-compatible.",
     );
   return provider;
 }
@@ -19,17 +19,19 @@ export function getAIProvider(): Provider {
 function configuration() {
   const provider = getAIProvider();
   if (provider === "mock")
-    throw new Error("模拟模式应由业务模块返回自己的示例结果。");
+    throw new Error(
+      "Mock mode must use sample results from the business module.",
+    );
   const key = process.env.AI_API_KEY?.trim();
   const model = process.env.AI_MODEL?.trim();
   if (!key || !model)
     throw new Error(
-      "请在根目录 .env 填写 AI_API_KEY 和 AI_MODEL，保存后重启服务。",
+      "Set AI_API_KEY and AI_MODEL in the root .env, then restart the server.",
     );
   const freeOnly =
     process.env.AI_FREE_ONLY ?? (provider === "openrouter" ? "true" : "false");
   if (freeOnly !== "true" && freeOnly !== "false")
-    throw new Error("AI_FREE_ONLY 只能为 true 或 false。");
+    throw new Error("AI_FREE_ONLY must be true or false.");
   if (
     provider === "openrouter" &&
     freeOnly === "true" &&
@@ -37,13 +39,13 @@ function configuration() {
     model !== "openrouter/free"
   )
     throw new Error(
-      "当前仅允许 OpenRouter 显式免费路由。请填写以 :free 结尾的完整模型 ID；如需付费模型，先明确将 AI_FREE_ONLY 改为 false。",
+      "Only explicit OpenRouter free routes are allowed. Use a full model ID ending in :free. Paid models require explicitly setting AI_FREE_ONLY=false.",
     );
   const jsonMode =
     process.env.AI_JSON_MODE ??
     (provider === "openrouter" ? "prompt" : "json_object");
   if (jsonMode !== "prompt" && jsonMode !== "json_object")
-    throw new Error("AI_JSON_MODE 只能为 prompt 或 json_object。");
+    throw new Error("AI_JSON_MODE must be prompt or json_object.");
   const base =
     process.env.AI_BASE_URL?.trim() ||
     (provider === "openrouter"
@@ -53,10 +55,12 @@ function configuration() {
   try {
     url = new URL(`${base.replace(/\/+$/, "")}/chat/completions`);
   } catch {
-    throw new Error("AI_BASE_URL 不是有效的服务地址。");
+    throw new Error("AI_BASE_URL is not a valid service URL.");
   }
   if (url.username || url.password || url.search || url.hash)
-    throw new Error("AI_BASE_URL 应填写不含密钥或查询参数的 API 基础地址。");
+    throw new Error(
+      "AI_BASE_URL must be an API base URL without credentials or query parameters.",
+    );
   if (
     url.protocol !== "https:" &&
     !(
@@ -64,14 +68,14 @@ function configuration() {
       ["localhost", "127.0.0.1"].includes(url.hostname)
     )
   )
-    throw new Error("AI 服务地址需要使用 HTTPS；本地模型可使用 HTTP。");
+    throw new Error("AI services require HTTPS. Local models may use HTTP.");
   if (
     provider === "openrouter" &&
     (!["openrouter.ai", "eu.openrouter.ai"].includes(url.hostname) ||
       url.pathname !== "/api/v1/chat/completions")
   )
     throw new Error(
-      "OpenRouter 模式请使用 AI_BASE_URL=https://openrouter.ai/api/v1。",
+      "OpenRouter requires AI_BASE_URL=https://openrouter.ai/api/v1.",
     );
   return { provider, key, model, jsonMode, url };
 }
@@ -79,31 +83,39 @@ function configuration() {
 function serviceError(status: number): Error {
   switch (status) {
     case 401:
-      return new Error("AI API Key 无效或已过期，请检查 AI_API_KEY。");
+      return new Error(
+        "The AI API key is invalid or expired. Check AI_API_KEY.",
+      );
     case 402:
       return new Error(
-        "AI 服务提示账户余额或额度不足，请检查账户状态和模型使用条件。",
+        "Insufficient AI balance or quota. Check your account and model terms.",
       );
     case 403:
-      return new Error("当前账户无权使用这个模型，请检查模型权限及账户设置。");
+      return new Error(
+        "Your account cannot access this model. Check model permissions and account settings.",
+      );
     case 404:
       return new Error(
-        "没有找到这个模型或 API 地址，请核对完整的 AI_MODEL 和 AI_BASE_URL。",
+        "Model or API endpoint not found. Check AI_MODEL and AI_BASE_URL.",
       );
     case 429:
       return new Error(
-        "模型请求达到限流或使用额度，请稍后重试，或选择另一个可用免费模型。",
+        "Model rate limit or quota reached. Try again later or choose another available free model.",
       );
     case 400:
     case 422:
       return new Error(
-        "模型或请求参数不兼容，请核对模型 ID；课程生成可使用 AI_JSON_MODE=prompt。",
+        "Incompatible model or request parameters. Check the model ID; course generation supports AI_JSON_MODE=prompt.",
       );
     case 502:
     case 503:
-      return new Error("当前模型暂时不可用，请稍后重试或选择另一个可用模型。");
+      return new Error(
+        "This model is temporarily unavailable. Try again later or select another model.",
+      );
     default:
-      return new Error(`AI 服务暂时不可用（HTTP ${status}），请稍后重试。`);
+      return new Error(
+        `AI service temporarily unavailable (HTTP ${status}). Please try again later.`,
+      );
   }
 }
 
@@ -142,7 +154,9 @@ export async function complete(
       redirect: "error",
     });
   } catch {
-    throw new Error("AI 服务连接失败或超时，请稍后重试。");
+    throw new Error(
+      "AI connection failed or timed out. Please try again later.",
+    );
   }
   if (!response.ok) throw serviceError(response.status);
   let result: {
@@ -155,10 +169,10 @@ export async function complete(
   try {
     result = await response.json();
   } catch {
-    throw new Error("AI 服务返回的响应格式不正确，请稍后重试。");
+    throw new Error("Invalid AI response format. Please try again later.");
   }
   if (!result || typeof result !== "object")
-    throw new Error("AI 服务没有返回有效响应。");
+    throw new Error("The AI service returned no valid response.");
   if (result.error)
     throw serviceError(
       typeof result.error.code === "number" ? result.error.code : 502,
@@ -166,12 +180,16 @@ export async function complete(
   const choice = result.choices?.[0];
   if (choice?.finish_reason === "length")
     throw new Error(
-      "模型输出达到长度限制，内容未完成。请缩短材料或减少生成范围后重试。",
+      "Model output was truncated. Shorten the materials or reduce the scope and retry.",
     );
   if (choice?.finish_reason === "content_filter" || choice?.message?.refusal)
-    throw new Error("模型未能完成这次请求，请调整教学主题或输入内容后重试。");
+    throw new Error(
+      "The model could not complete the request. Adjust the topic or input and retry.",
+    );
   const content = choice?.message?.content;
   if (typeof content !== "string" || !content.trim())
-    throw new Error("模型没有返回可用文本，请重试或选择另一个模型。");
+    throw new Error(
+      "The model returned no usable text. Retry or select another model.",
+    );
   return content;
 }

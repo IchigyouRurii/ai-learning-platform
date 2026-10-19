@@ -19,15 +19,16 @@ export async function getWorkspace(actor: User) {
 
 async function requireCourse(id: string) {
   const course = await getRepository().findCourse(id);
-  if (!course) throw new Error("课程不存在。");
+  if (!course) throw new Error("Course not found.");
   return course;
 }
 
 async function requireLearningAccess(actor: User, course: Course) {
   assertStudent(actor);
-  if (course.status !== "published") throw new Error("课程尚未发布。");
+  if (course.status !== "published")
+    throw new Error("This course has not been published.");
   if (!(await getRepository().isEnrolled(course.id, actor.id)))
-    throw new Error("请先加入这门课程。");
+    throw new Error("Please enroll in this course first.");
 }
 
 export async function createCourse(
@@ -60,7 +61,7 @@ export async function enrollCourse(actor: User, id: string) {
   assertStudent(actor);
   const course = await requireCourse(id);
   if (course.status !== "published" || course.visibility !== "cohort")
-    throw new Error("课程不可加入。");
+    throw new Error("This course is not open for enrollment.");
   await getRepository().enroll(id, actor.id);
 }
 
@@ -72,7 +73,8 @@ export async function getLearningContext(
   const course = await requireCourse(courseId);
   await requireLearningAccess(actor, course);
   const activity = getActivities(course).find((item) => item.id === activityId);
-  if (!activity) throw new Error("活动不属于这门课程。");
+  if (!activity)
+    throw new Error("This activity does not belong to the course.");
   return { course, activity };
 }
 
@@ -86,7 +88,9 @@ export async function recordSubmission(
     course.version !== input.courseVersion ||
     !getActivities(course).some((item) => item.id === input.activityId)
   )
-    throw new Error("课程版本或活动已变化，请刷新后重试。");
+    throw new Error(
+      "The course version or activity has changed. Refresh and try again.",
+    );
   return getRepository().insertSubmission({
     ...input,
     id: randomUUID(),
@@ -103,7 +107,7 @@ export async function addTeacherFeedback(
 ) {
   assertCourseOwner(actor, await requireCourse(courseId));
   if (!(await getRepository().isEnrolled(courseId, studentId)))
-    throw new Error("学生不在课程中。");
+    throw new Error("The student is not enrolled in this course.");
   await getRepository().insertFeedback({
     id: randomUUID(),
     courseId,

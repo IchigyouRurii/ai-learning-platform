@@ -47,12 +47,12 @@ describe("OpenRouter transport and course integration", () => {
   });
   it("rejects paid model IDs before any request while the free-only setting is enabled", async () => {
     vi.stubEnv("AI_MODEL", "example/paid-model");
-    await expect(complete(messages)).rejects.toThrow("免费路由");
+    await expect(complete(messages)).rejects.toThrow("free routes");
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it("prevents OpenRouter credentials being sent to an incorrectly configured provider address", async () => {
     vi.stubEnv("AI_BASE_URL", "https://api.openai.com/v1");
-    await expect(complete(messages)).rejects.toThrow("OpenRouter 模式");
+    await expect(complete(messages)).rejects.toThrow("OpenRouter requires");
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it("requires configuration instead of silently returning mock results", async () => {
@@ -79,7 +79,7 @@ describe("OpenRouter transport and course integration", () => {
     fetchMock.mockResolvedValue(
       new Response("provider-internal-details", { status: 429 }),
     );
-    await expect(complete(messages)).rejects.toThrow("限流");
+    await expect(complete(messages)).rejects.toThrow("rate limit");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it("handles an error inside a successful HTTP response", async () => {
@@ -88,14 +88,14 @@ describe("OpenRouter transport and course integration", () => {
         error: { code: 503, message: "provider-internal-details" },
       }),
     );
-    await expect(complete(messages)).rejects.toThrow("暂时不可用");
+    await expect(complete(messages)).rejects.toThrow("temporarily unavailable");
   });
   it("rejects truncated or empty model output", async () => {
     fetchMock
       .mockResolvedValueOnce(response("partial", "length"))
       .mockResolvedValueOnce(response(""));
-    await expect(complete(messages)).rejects.toThrow("长度限制");
-    await expect(complete(messages)).rejects.toThrow("可用文本");
+    await expect(complete(messages)).rejects.toThrow("truncated");
+    await expect(complete(messages)).rejects.toThrow("usable text");
   });
   it("accepts a complete fenced JSON course but still validates the course schema", async () => {
     const course = createSeedState().courses[0];
@@ -110,10 +110,10 @@ describe("OpenRouter transport and course integration", () => {
     });
     expect(result.title).toBe(course.title);
     expect(() => parseGeneratedCourse('{"title":"incomplete"}')).toThrow(
-      "必要字段",
+      "missing or invalid fields",
     );
     expect(() =>
       parseGeneratedCourse('课程如下：{"title":"incomplete"}'),
-    ).toThrow("完整 JSON");
+    ).toThrow("valid JSON");
   });
 });

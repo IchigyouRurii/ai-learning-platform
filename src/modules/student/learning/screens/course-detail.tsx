@@ -23,7 +23,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
     <>
       <Link href="/student" className="back-link">
         <ArrowLeft size={15} />
-        返回课程广场
+        Back to Marketplace
       </Link>
       <PageHeading
         eyebrow={course.subject}
@@ -35,9 +35,10 @@ export async function StudentCourseDetail({ id }: { id: string }) {
           {!enrolled ? (
             <section className="panel join-panel">
               <Target size={36} strokeWidth={1.2} />
-              <h2>准备好探索这个主题了吗？</h2>
+              <h2>Ready to explore this topic?</h2>
               <p className="muted">
-                加入后可以完成活动、获取反馈，并保存学习记录。
+                Enroll to complete activities, receive feedback, and save your
+                progress.
               </p>
               <EnrollButton courseId={course.id} />
             </section>
@@ -73,7 +74,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                   ) : (
                     <div key={block.id} className="activity-preview">
                       <p>
-                        此内容类型的渲染器尚未接入：
+                        Renderer not yet available for:
                         {block.type === "activity"
                           ? block.activity.type
                           : block.type}
@@ -86,25 +87,25 @@ export async function StudentCourseDetail({ id }: { id: string }) {
           )}
         </div>
         <aside className="panel course-summary">
-          <Badge tone="green">{course.lessons.length} 节短课</Badge>
-          <h3>你将学会</h3>
+          <Badge tone="green">{course.lessons.length} lessons</Badge>
+          <h3>What you will learn</h3>
           <ul>
             {course.goals.map((goal, index) => (
               <li key={index}>{goal}</li>
             ))}
           </ul>
           <hr />
-          <h3>学习进度</h3>
+          <h3>Learning progress</h3>
           <ProgressBar percent={progress.percent} />
           <p className="muted">
-            {progress.done} / {progress.total} 个互动任务已提交
+            {progress.done} / {progress.total} activities submitted
           </p>
           <p className="form-hint">
-            完成状态仅表示提交过任务，不代表知识掌握程度。
+            Completion records activity submissions, not mastery.
           </p>
           <hr />
           <Link href="/student/progress" className="text-link">
-            查看学习记录与教师反馈 →
+            View learning records and teacher feedback →
           </Link>
         </aside>
       </div>

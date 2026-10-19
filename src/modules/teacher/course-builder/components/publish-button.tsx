@@ -21,7 +21,7 @@ export function PublishButton({ courseId }: { courseId: string }) {
           })
         }
       >
-        {pending ? "正在发布…" : "确认并发布课程"}
+        {pending ? "Publishing…" : "Confirm and publish"}
       </button>
       {error && (
         <p role="alert" className="error-text">

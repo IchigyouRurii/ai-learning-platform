@@ -5,7 +5,10 @@ export const runtime = "nodejs";
 function handler(request: Request) {
   if (getAppMode() !== "neon" || !isAuthConfigured())
     return Response.json(
-      { code: "AUTH_NOT_CONFIGURED", message: "登录服务尚未完成配置。" },
+      {
+        code: "AUTH_NOT_CONFIGURED",
+        message: "Authentication is not configured.",
+      },
       { status: 503 },
     );
   return getAuth().handler(request);

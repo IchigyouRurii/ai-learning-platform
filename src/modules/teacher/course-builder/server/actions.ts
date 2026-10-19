@@ -20,7 +20,8 @@ export async function generateDraftAction(
 ): Promise<ActionResult<CourseDraft>> {
   try {
     const actor = await getCurrentUser();
-    if (actor.role !== "teacher") throw new Error("需要教师身份。");
+    if (actor.role !== "teacher")
+      throw new Error("A teacher account is required.");
     return { ok: true, data: await generateCourse(input) };
   } catch (error) {
     return { ok: false, error: actionError(error) };

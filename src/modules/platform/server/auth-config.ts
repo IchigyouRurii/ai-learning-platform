@@ -11,7 +11,9 @@ export function createAuth(
   },
 ) {
   if (configuration.secret.length < 32)
-    throw new Error("BETTER_AUTH_SECRET 至少需要 32 个随机字符。");
+    throw new Error(
+      "BETTER_AUTH_SECRET requires at least 32 random characters.",
+    );
   const base = new URL(configuration.baseURL);
   if (
     base.protocol !== "https:" &&
@@ -20,7 +22,7 @@ export function createAuth(
       ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)
     )
   )
-    throw new Error("正式环境登录地址必须使用 HTTPS。");
+    throw new Error("Production authentication URLs must use HTTPS.");
   const origins = [base.origin];
   if (
     base.protocol === "http:" &&
@@ -32,7 +34,7 @@ export function createAuth(
     origins.push(alternate.origin);
   }
   return betterAuth({
-    appName: "小课",
+    appName: "OpenLearnING",
     database,
     secret: configuration.secret,
     baseURL: configuration.baseURL,
@@ -76,7 +78,9 @@ export function createAuth(
     logger: {
       level: "error",
       log: () =>
-        console.error("认证服务发生错误，请检查连接配置和数据库初始化状态。"),
+        console.error(
+          "Authentication error. Check the connection and database initialization.",
+        ),
     },
   });
 }

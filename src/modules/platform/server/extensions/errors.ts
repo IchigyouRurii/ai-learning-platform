@@ -32,11 +32,11 @@ export function featureFailure(error: unknown): FeatureResult<never> {
     return {
       ok: false,
       code: "INVALID_INPUT",
-      error: error.issues[0]?.message ?? "输入格式不正确。",
+      error: error.issues[0]?.message ?? "Invalid input format.",
     };
   return {
     ok: false,
     code: "INTERNAL_ERROR",
-    error: "操作暂时无法完成，请稍后重试。",
+    error: "Unable to complete this action. Please try again later.",
   };
 }

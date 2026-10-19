@@ -130,7 +130,7 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           [courseId, ownerId],
         );
         const row = result.rows[0];
-        if (!row) throw new Error("课程不存在或没有管理权限。");
+        if (!row) throw new Error("Course not found or access denied.");
         if (row.status !== "published") {
           courseDraftSchema.parse(row.content);
           await client.query(
@@ -158,7 +158,8 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         `insert into enrollments (course_id, student_id) select id, $2 from courses where id = $1 and status = 'published' and visibility = 'cohort' on conflict (course_id, student_id) do update set joined_at = enrollments.joined_at returning course_id`,
         [courseId, studentId],
       );
-      if (!result.rowCount) throw new Error("课程不可加入。");
+      if (!result.rowCount)
+        throw new Error("This course is not open for enrollment.");
     },
     async insertSubmission(item) {
       const result = await pool.query(
@@ -180,7 +181,9 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         ],
       );
       if (!result.rowCount)
-        throw new Error("课程版本、活动或加入关系已变化，请刷新后重试。");
+        throw new Error(
+          "The course, activity, or enrollment has changed. Refresh and try again.",
+        );
       return item;
     },
     async insertFeedback(item) {
@@ -195,7 +198,8 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           item.createdAt,
         ],
       );
-      if (!result.rowCount) throw new Error("没有管理权限，或学生不在课程中。");
+      if (!result.rowCount)
+        throw new Error("Access denied or student not enrolled.");
     },
   };
 }

@@ -18,7 +18,7 @@ const answerSchema = z.object({
   answer: z
     .string()
     .trim()
-    .min(10, "请至少写 10 个字符，说明你的想法。")
+    .min(10, "Please write at least 10 characters to explain your thoughts.")
     .max(6000),
   background: z.string().min(1).max(200),
   goal: z.string().max(500),
