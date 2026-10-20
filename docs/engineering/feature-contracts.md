@@ -6,7 +6,7 @@
 
 现有登录、教师建课/首次发布、学生加入、开放回答、AI 反馈和教师反馈保留原来的调用入口。已有功能的可运行代码、云端连接测试与完整业务验收分别记录，不能混为一谈。
 
-新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**当前所有新增操作都为 reserved**：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。
+新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**讨论区已实现；其余新增操作仍为 reserved**：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。讨论区的实现范围、数据表与演示路径见 [师生问答实现](discussions.md)。
 
 ```ts
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -26,7 +26,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 | 层        | 文件                                            | 约定                                                                         |
 | --------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
 | 输入/输出 | `src/shared/contracts/features/*.ts`            | Zod schema、可推导 TS 类型、角色、资源规则、预留状态                         |
-| 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；目前全部关闭，后续逐项实现                                 |
+| 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；讨论区已启用，其余仍为预留，后续逐项实现                   |
 | 存储端口  | `src/shared/database/extension-repositories.ts` | 具名且 actor-scoped 的查询与写入；未来 Neon adapter 必须实现所有权及版本条件 |
 
 现有 `PlatformRepository` 不被扩展成一大组假方法。新端口与其并存，逐个领域接入真实 adapter 后启用，避免为了添加类型而破坏现有数据库适配器。
@@ -49,7 +49,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 新服务可使用公开导出的 `FeatureServiceError` 表达安全的领域失败，并通过 `featureFailure` 转为结果；未识别的内部错误只返回通用提示，Next.js 重定向/404 控制流会继续抛出。不得用原始 SQL 或模型错误直接构造用户消息。
 
-当前预留入口只做会话 actor 是否存在、角色白名单、输入校验。`resourcePolicy` 是待实现且必须测试的规则，字符串本身不执行授权。入口接入真实逻辑前，必须完成资源查询、服务端授权与 SQL 条件校验，不能简单删掉 NOT_IMPLEMENTED。
+预留入口只做会话 actor 是否存在、角色白名单、输入校验。`resourcePolicy` 是待实现且必须测试的规则，字符串本身不执行授权。入口接入真实逻辑前，必须完成资源查询、服务端授权与 SQL 条件校验，不能简单删掉 NOT_IMPLEMENTED。讨论区已按此要求接入真实仓储，权限条件写在参数化 SQL 中。
 
 ## 按领域的完整操作
 
@@ -154,10 +154,10 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 
 合同：`features/discussions.ts`；入口：`extensions/discussions.ts`。
 
-- `ask / listThreads / getThread`：课程提问、本人的问题列表、线程。
-- `reply / resolve`：课程教师回复、提问者或教师标记解决。
+- `ask / listThreads / getThread`：课程提问、课程问题列表、线程。
+- `reply / resolve`：课程成员回答、提问者或教师标记解决。
 
-问题关联课程版本和可选章节；学生仅能查看自己的问题，教师仅查看本人课程成员的问题。默认不向全班公开。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
+问题关联课程版本和可选章节。**课程内公开**：已加入课程的学生可以查看该课程全部问题与回答，学生之间可以互相回答；教师只能查看自己课程的全部问题与回答，并可以回答或标记解决；非课程成员不可见。问题与回复都返回作者 `{ id, name, role }`，不暴露账号其他信息。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
 
 ## 需求覆盖矩阵
 
@@ -190,7 +190,7 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 4. AI/存储/邮件/worker 依赖确实可用，错误有明确结果；不能模拟成功。
 5. 服务端验证输出 schema，接入页面适配层；页面不能把用户身份当请求参数。
 6. 补权限、串改 ID、旧版本、并发/幂等测试和完整流程验收。
-7. 将该项 status 改为 implemented，并由真实服务替换预留方法；修改 FeatureDefinition 的状态类型和相应能力清单测试。**当前类型有意只允许 reserved，迫使启用变更经过显式审查。**
+7. 将该项 status 改为 implemented，并由真实服务替换预留方法；更新能力清单测试。`FeatureDefinition.status` 允许 `reserved | implemented`，启用变更仍需显式审查。
 
 界面开发可用成员本地 fixture，但不能把 fixture 当真实数据库或 AI 的返回。预留入口失败只说明接口存在，不代表功能验收完成。
 
@@ -202,3 +202,11 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - ESLint、TypeScript 通过。在不含 `.env` 的隔离源代码副本中完成 Next.js 生产构建（Webpack），未覆盖正在运行的开发服务产物。
 - 没有执行新 Neon 迁移、创建业务数据、调用真实 AI、发送邀请邮件或上传材料。
 - 本次未实现班级、个人建课、上传、测验、路径、问答或管理页面；资源级授权规则是实施要求，尚未接入真实仓储。
+
+## 本次验证记录（2026-10-19）
+
+- 启用讨论区：新增 `discussion_questions`、`discussion_replies` 两张表及 `202610190001_discussions.sql`。
+- 讨论区改为**课程内公开**：已加入课程的学生可查看并回答该课程全部问题；教师仅可查看自己课程并回答/解决；非课程成员不可见。问题和回复返回作者姓名与角色。
+- `platformExtensions.discussions` 由预留工厂替换为真实服务；仓储权限条件写在参数化 SQL 中，覆盖课程成员、课程所有者、提问者/教师解决、版本与章节校验。
+- 新增 pglite 集成测试，覆盖非成员不可见、跨教师不可见、学生互相回答、解决权限、旧版本和未知章节。`pnpm lint`、`pnpm typecheck`、`pnpm test` 通过（11 个测试文件、57 项测试）。
+- 已在 Neon 分支 `discussions-dev` 执行迁移并完成浏览器手工验收；主库尚未迁移，部署前须在主库执行迁移。

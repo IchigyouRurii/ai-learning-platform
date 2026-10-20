@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   feature,
   idSchema,
+  memberViewSchema,
   pageInputSchema,
   pageSchema,
   timestampSchema,
@@ -13,7 +14,7 @@ export const questionSchema = z.object({
   courseId: idSchema,
   courseVersion: versionSchema,
   lessonId: idSchema.nullable(),
-  studentId: idSchema,
+  author: memberViewSchema,
   message: z.string(),
   status: z.enum(["open", "resolved"]),
   createdAt: timestampSchema,
@@ -21,7 +22,7 @@ export const questionSchema = z.object({
 export const replySchema = z.object({
   id: idSchema,
   questionId: idSchema,
-  teacherId: idSchema,
+  author: memberViewSchema,
   message: z.string(),
   createdAt: timestampSchema,
 });
@@ -39,7 +40,8 @@ export const discussionFeatures = {
     }),
     questionSchema,
     ["student"],
-    "只能就已获授权的教师课程提问；身份从会话取得；章节属于指定版本。个人自学课程没有自动指定的教师。",
+    "只能对自己已加入的课程提问；身份从会话取得；章节属于指定发布版本。",
+    "implemented",
   ),
   listThreads: feature(
     z.strictObject({
@@ -49,13 +51,15 @@ export const discussionFeatures = {
     }),
     pageSchema(questionSchema),
     ["teacher", "student"],
-    "学生只看自己的问题，studentId 只能为自己；教师仅看自己课程成员的问题。",
+    "已加入课程的学生可查看该课程全部问题；教师仅可查看自己课程；非课程成员不可见。studentId 过滤只对教师生效。",
+    "implemented",
   ),
   getThread: feature(
     z.strictObject({ questionId: idSchema }),
     threadSchema,
     ["teacher", "student"],
-    "学生为提问者或教师为课程所有者；不向全班默认公开。",
+    "学生必须是课程成员；教师必须是课程所有者；不向课程外成员公开。",
+    "implemented",
   ),
   reply: feature(
     z.strictObject({
@@ -63,14 +67,16 @@ export const discussionFeatures = {
       message: z.string().trim().min(1).max(6000),
     }),
     replySchema,
-    ["teacher"],
-    "教师拥有问题关联课程；回复者从会话取得。",
+    ["teacher", "student"],
+    "学生必须是课程成员；教师必须是课程所有者；作者从会话取得。",
+    "implemented",
   ),
   resolve: feature(
     z.strictObject({ questionId: idSchema }),
     questionSchema,
     ["teacher", "student"],
-    "仅提问者或所属课程教师可以标记解决。",
+    "仅提问者本人或所属课程教师可以标记解决；其他学生可以回答但不能代为解决。",
+    "implemented",
   ),
 };
 export type CourseQuestion = z.infer<typeof questionSchema>;

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { getCurrentUser, getWorkspace } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { Badge, PageHeading } from "@/shared/ui/primitives";
+import { TeacherCourseDiscussion } from "@/modules/teacher/discussions/screens/course-discussion";
 import { PublishButton } from "../components/publish-button";
 
 export async function TeacherCourseDetail({ id }: { id: string }) {
@@ -88,6 +89,9 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
           )}
         </aside>
       </div>
+      {course.status === "published" && (
+        <TeacherCourseDiscussion courseId={course.id} />
+      )}
     </>
   );
 }

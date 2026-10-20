@@ -158,7 +158,7 @@ const actor: User = { id: "actor", name: "测试用户", role: "teacher" };
 
 describe("reserved service boundaries", () => {
   it("has a validated, fail-closed entry point for every declared operation without calling external systems", async () => {
-    let count = 0;
+    let reservedCount = 0;
     for (const [domain, definitions] of Object.entries(extensionDefinitions)) {
       const service = platformExtensions[
         domain as keyof typeof platformExtensions
@@ -175,6 +175,7 @@ describe("reserved service boundaries", () => {
           definition.input.safeParse(examples[name]).success,
           `${domain}.${name}`,
         ).toBe(true);
+        if (definition.status !== "reserved") continue;
         expect(
           await service[name](
             { ...actor, role: definition.roles[0] },
@@ -192,12 +193,24 @@ describe("reserved service boundaries", () => {
           expect(
             await service[name]({ ...actor, role: denied }, examples[name]),
           ).toMatchObject({ ok: false, code: "FORBIDDEN" });
-        count++;
+        reservedCount++;
       }
     }
-    expect(getExtensionCapabilities()).toHaveLength(count);
+    const capabilities = getExtensionCapabilities();
+    const total = Object.values(extensionDefinitions).reduce(
+      (sum, definitions) => sum + Object.keys(definitions).length,
+      0,
+    );
+    const discussionCapabilities = capabilities.filter((item) =>
+      item.operation.startsWith("discussions."),
+    );
+    expect(capabilities).toHaveLength(total);
     expect(
-      getExtensionCapabilities().every((item) => item.status === "reserved"),
+      capabilities.filter((item) => item.status === "reserved"),
+    ).toHaveLength(reservedCount);
+    expect(discussionCapabilities).toHaveLength(5);
+    expect(
+      discussionCapabilities.every((item) => item.status === "implemented"),
     ).toBe(true);
     expect(external.database).not.toHaveBeenCalled();
     expect(external.ai).not.toHaveBeenCalled();

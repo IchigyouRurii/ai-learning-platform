@@ -198,20 +198,20 @@ export interface DiscussionRepository {
   insertQuestion(
     actor: User,
     input: CourseVersionRef & { lessonId?: string; message: string },
-  ): Promise<CourseQuestion>;
+  ): Promise<CourseQuestion | null>;
   listThreads(
     actor: User,
     courseId: string,
     page: PageInput,
     studentId?: string,
-  ): Promise<Page<CourseQuestion>>;
+  ): Promise<Page<CourseQuestion> | null>;
   getThread(actor: User, questionId: string): Promise<QuestionThread | null>;
   insertReply(
     actor: User,
     questionId: string,
     message: string,
-  ): Promise<QuestionReply>;
-  resolve(actor: User, questionId: string): Promise<CourseQuestion>;
+  ): Promise<QuestionReply | null>;
+  resolve(actor: User, questionId: string): Promise<CourseQuestion | null>;
 }
 
 export type StoredMaterial = LearningMaterial & {

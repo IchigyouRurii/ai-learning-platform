@@ -30,12 +30,14 @@ export type FeatureErrorCode = z.infer<typeof featureErrorCodeSchema>;
 export type FeatureResult<T> =
   { ok: true; data: T } | { ok: false; error: string; code: FeatureErrorCode };
 
+export type FeatureStatus = "reserved" | "implemented";
+
 export interface FeatureDefinition {
   input: z.ZodType;
   output: z.ZodType;
   roles: readonly Role[];
   resourcePolicy: string;
-  status: "reserved";
+  status: FeatureStatus;
 }
 
 export function feature<I extends z.ZodType, O extends z.ZodType>(
@@ -43,8 +45,9 @@ export function feature<I extends z.ZodType, O extends z.ZodType>(
   output: O,
   roles: readonly Role[],
   resourcePolicy: string,
+  status: FeatureStatus = "reserved",
 ) {
-  return { input, output, roles, resourcePolicy, status: "reserved" as const };
+  return { input, output, roles, resourcePolicy, status };
 }
 export type FeatureInput<D extends FeatureDefinition> = z.input<D["input"]>;
 export type FeatureOutput<D extends FeatureDefinition> = z.output<D["output"]>;
