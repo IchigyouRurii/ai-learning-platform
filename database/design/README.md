@@ -1,6 +1,6 @@
 # 扩展数据模型设计
 
-本目录是设计约定，不被 db:migrate 执行。本次补框架没有创建新云端数据表，也没有修改任何已应用迁移。实际开发某领域时，负责人基于本设计新增 `database/migrations/<timestamp>_<domain>.sql` 并验收。
+本目录是设计约定，不被 db:migrate 执行。班级相关迁移：`database/migrations/202610190001_classrooms.sql`（创建 `classrooms` 与 `classroom_members`）已应用到云端 Neon；`database/migrations/202610200001_classroom_course.sql`（班级绑定课程）尚未应用，需负责人确认后执行。其余条目仍是设计，实际开发某领域时，负责人基于本设计新增 `database/migrations/<timestamp>_<domain>.sql` 并验收。
 
 ## 现有表
 
@@ -12,8 +12,8 @@ CourseDraft 继续用于原有文字/开放回答流程；新 AuthoringDraft 通
 
 | 领域         | 计划表或变更                                         | 关键字段与约束                                                                                                                                                                 |
 | ------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 班级         | classrooms                                           | id、teacher_id、name、description、created_at；teacher 外键 user                                                                                                               |
-| 班级成员     | classroom_members                                    | (class_id, student_id) 主键、joined_at；只允许学生；班级拥有者查询名单                                                                                                         |
+| 班级         | classrooms（202610190001 已应用；course_id 由 202610200001 待应用） | id、teacher_id、course_id NOT NULL、name、description、created_at；teacher/course 外键 user/courses；课程须为教师自己的已发布教学课程                                     |
+| 班级成员     | classroom_members（202610190001 已应用）             | (class_id, student_id) 主键、joined_at；仓储只加入 role='student' 的账号；班级拥有者查询名单；建班/导入成员时同步写入课程 enrollments                                        |
 | 班级邀请码   | classroom_join_codes                                 | class_id、token_hash UNIQUE、expires_at、revoked_at；仅保存哈希                                                                                                                |
 | 邮箱邀请     | classroom_invitations                                | id、class_id、email_normalized、token_hash UNIQUE、expires_at、accepted_by、accepted_at；一次性消费                                                                            |
 | 课程分配     | course_assignments                                   | id、class_id、course_id、course_version、due_at、assigned_at；唯一 class+course+version，复合外键指向 course_revisions                                                         |
@@ -69,7 +69,7 @@ erDiagram
 
 ## 启用顺序
 
-1. 班级/成员/分配，以及课程草稿并发、个人所有权、统一学习授权。
+1. 班级/成员已实现（迁移待云端应用）；课程分配、课程草稿并发、个人所有权、统一学习授权仍待实现。
 2. 版本化活动配置、尝试、章节完成与问答。
 3. 档案/路径、对象存储/解析、管理员管理；管理员下架上线前必须改造所有旧访问路径。
 4. 异步 worker，只有真实执行器可用才启用任务接口。

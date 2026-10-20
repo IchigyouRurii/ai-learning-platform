@@ -7,6 +7,7 @@ import {
   GraduationCap,
   FileText,
   LayoutGrid,
+  School,
   Users,
 } from "lucide-react";
 import type { Role } from "@/shared/contracts";
@@ -29,6 +30,7 @@ export function Navigation({ role }: { role: Role }) {
               label: "Teaching Management",
               icon: Users,
             },
+            { href: "/teacher/classes", label: "Classes", icon: School },
           ]
         : [
             {
@@ -41,6 +43,7 @@ export function Navigation({ role }: { role: Role }) {
               label: "My Learning",
               icon: ChartNoAxesCombined,
             },
+            { href: "/student/classes", label: "My Classes", icon: School },
           ];
   return (
     <nav className="navigation" aria-label="Primary navigation">

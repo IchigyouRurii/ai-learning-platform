@@ -65,7 +65,7 @@ bash scripts/local.sh db:seed teacher@example.com
 - 服务端调用：从 `@/modules/platform` 导入 `platformExtensions`，例如 `platformExtensions.classrooms.create(actor, input)`。
 - 课程生成公共业务：`src/modules/course-generation/`；教师旧路径保留兼容导出。
 - 存储及外部依赖端口：`src/shared/database/extension-repositories.ts`。
-- 状态：`getExtensionCapabilities()` 列出预留操作。新增能力当前全部返回 `NOT_IMPLEMENTED`，不会伪造成功；现有流程保持原入口。
+- 状态：`getExtensionCapabilities()` 列出全部操作及状态。班级名单 7 个操作已实现，要求 `APP_MODE=neon` 并先应用迁移；其余新增能力仍返回 `NOT_IMPLEMENTED`，不会伪造成功；现有流程保持原入口。
 
 **接口框架齐备不等于功能已交付。** 后续按领域实现真实仓储、资源权限和页面，并新增迁移。完整输入输出、权限、职责及需求覆盖见 [功能接口](docs/engineering/feature-contracts.md)，数据关系与迁移规划见 [数据模型设计](database/design/README.md)。
 

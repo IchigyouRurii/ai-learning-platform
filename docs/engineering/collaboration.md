@@ -43,7 +43,7 @@
 | 教师课程编辑、发布、预览   | B 教师流程 | `teacher/course-builder/`、`platform/server/extensions/courses.ts`                                                | C 生成接口、D 个人课程     |
 | 公共课程生成与局部改写     | C 课程 AI  | `modules/course-generation/`、`platform/server/extensions/generation.ts`                                          | B/D 调用，A 复核权限与存储 |
 | 学生阅读、自学、活动、路径 | D 学习流程 | `student/` 对应目录、`extensions/learning.ts`、`plans.ts`                                                         | E 进度指标、C 活动定义     |
-| 班级、分配、教师跟踪与问答 | E 进度互动 | `teacher/classrooms/`、`student/classrooms/`、两端 discussions 目录、`extensions/classrooms.ts`、`discussions.ts` | D 学生入口、B 教师入口     |
+| 班级、分配、教师跟踪与问答 | E 进度互动 | `teacher/classrooms/`、`student/classrooms/`、两端 discussions 目录、`extensions/classrooms.ts`、`discussions.ts` | D 学生入口、B 教师入口；班级名单已实现，分配/跟踪/问答待实现 |
 
 业务目录按需创建，不为“预留”添加空页面。以上 extensions 路径均位于 `src/modules/platform/server/`；某领域负责人实现自己的文件，公共服务索引由 A 协调。每个领域可认领对应 Neon adapter 新文件；A 负责迁移、公共端口和权限策略审查，无需独自实现所有领域 SQL。
 

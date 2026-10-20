@@ -40,8 +40,8 @@ Server Action 返回 `ActionResult<T>`；不把用户身份、课程所有者或
 
 ## 2026-10-17 完整需求扩展
 
-原有服务继续有效。新增领域合同位于 `shared/contracts/features/`，服务端通过 `platformExtensions` 的领域对象调用。所有新增操作目前均为 reserved，返回带 `code` 的 `FeatureResult<T>`，不会访问真实外部服务。详见 [完整功能接口](feature-contracts.md)。
+原有服务继续有效。新增领域合同位于 `shared/contracts/features/`，服务端通过 `platformExtensions` 的领域对象调用。新增操作返回带 `code` 的 `FeatureResult<T>`；班级名单的 `create`、`get`、`deleteClass`、`listMine`、`listMembers`、`listStudents`、`importStudents`、`removeMember` 已接入真实 Neon 仓储，其余操作仍为 reserved 且不访问外部服务。详见 [完整功能接口](feature-contracts.md)。
 
 作者数据与学生数据已明确分开：AuthoringDraft 包含评价配置；LearnerCourse/LearnerActivity 只含学习端可见内容。班级分配、路径、进度和答题记录绑定发布版本，草稿更新使用单独的 draftRevision。
 
-领域仓储端口见 `shared/database/extension-repositories.ts`，真实表结构开发规划见 `database/design/README.md`。这些端口尚未接入 Neon，不能把预留字段或声明当作已实现功能。
+领域仓储端口见 `shared/database/extension-repositories.ts`，真实表结构开发规划见 `database/design/README.md`。班级端口已接入 Neon（`shared/database/classroom-repository.ts`；建班/导入会同步写入课程报名，`course_id` 迁移需先应用）；其余端口尚未接入，不能把预留字段或声明当作已实现功能。
