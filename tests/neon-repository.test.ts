@@ -21,7 +21,7 @@ const submission = (): Submission => ({
   id: randomUUID(),
   courseId: "course-1",
   courseVersion: 1,
-  activityId: "ai-coding-activity-1",
+  activityId: "ai-coding-r1",
   studentId: student.id,
   answer: "需求应包括使用者、任务以及验收条件。",
   aiFeedback: "请补充一个例子。",
@@ -33,12 +33,16 @@ beforeAll(async () => {
   await postgres.database.exec(
     'create table "user" (id text primary key, name text, role text)',
   );
-  await postgres.database.exec(
-    await readFile(
-      new URL("../database/migrations/202610170001_neon.sql", import.meta.url),
-      "utf8",
-    ),
-  );
+  for (const name of [
+    "202610170001_neon.sql",
+    "202610220001_course_editing.sql",
+  ])
+    await postgres.database.exec(
+      await readFile(
+        new URL(`../database/migrations/${name}`, import.meta.url),
+        "utf8",
+      ),
+    );
   repository = createNeonRepository(postgres.pool);
 }, 30000);
 beforeEach(async () => {

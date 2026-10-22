@@ -9,6 +9,10 @@ export {
   recordSubmission,
   addTeacherFeedback,
   calculateProgress,
+  getCourseDocumentForAuthor,
+  updateCourseDraft,
+  getLearningPath,
+  saveLearningPath,
 } from "./server/services";
 
 export {

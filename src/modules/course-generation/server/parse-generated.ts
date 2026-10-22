@@ -1,22 +1,33 @@
 import { courseDraftSchema, type CourseDraft } from "@/shared/contracts";
 
-export function parseGeneratedCourse(raw: string): CourseDraft {
+function extractJson(raw: string): unknown {
   const trimmed = raw.trim();
-  // Some instruction-following free models wrap an otherwise valid JSON object
-  // in a single fenced block. Accept that wrapper, then validate the same schema.
-  const fenced = /^```(?:json)?\s*\r?\n([\s\S]*?)\r?\n```$/i.exec(trimmed);
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(fenced ? fenced[1] : trimmed);
-  } catch {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  const candidates = [fenced?.[1]?.trim() ?? trimmed];
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first >= 0 && last > first) candidates.push(trimmed.slice(first, last + 1));
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  throw new Error(
+    "The model did not return valid JSON. Regenerate the course or try again.",
+  );
+}
+
+export function parseGeneratedCourse(raw: string): CourseDraft {
+  const parsed = extractJson(raw);
+  const result = courseDraftSchema.safeParse(parsed);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const location = issue.path.length ? ` at ${issue.path.join(".")}` : "";
     throw new Error(
-      "The generated course is not valid JSON. Regenerate or choose another model.",
+      `The generated course has an invalid structure${location}: ${issue.message}.`,
     );
   }
-  const result = courseDraftSchema.safeParse(parsed);
-  if (!result.success)
-    throw new Error(
-      "The draft has missing or invalid fields. Please regenerate.",
-    );
   return result.data;
 }

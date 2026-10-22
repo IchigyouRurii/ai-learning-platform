@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { BookOpen, CheckCheck, Compass } from "lucide-react";
 import {
   calculateProgress,
   getCurrentUser,
+  getLearningPath,
   getWorkspace,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
@@ -11,7 +13,15 @@ export async function StudentCourseList() {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
   const workspace = await getWorkspace(user);
+  const savedPath = await getLearningPath(user);
   const enrolled = new Set(workspace.enrollments.map((item) => item.courseId));
+  const personal = workspace.courses.filter(
+    (course) =>
+      course.visibility === "personal" && course.ownerId === user.id,
+  );
+  const catalog = workspace.courses.filter(
+    (course) => course.visibility !== "personal",
+  );
   const completed = workspace.courses.filter(
     (course) =>
       enrolled.has(course.id) &&
@@ -56,14 +66,79 @@ export async function StudentCourseList() {
           icon={<Compass size={17} />}
         />
       </section>
+      {savedPath && (
+        <section className="panel path-summary">
+          <div>
+            <p className="eyebrow">YOUR LEARNING PATH</p>
+            <h2>{savedPath.title}</h2>
+            <p className="muted">
+              {savedPath.steps.length} courses · saved for you
+            </p>
+          </div>
+          <div className="path-summary-steps">
+            {savedPath.steps.slice(0, 3).map((step, index) => {
+              const course = workspace.courses.find(
+                (item) => item.id === step.courseId,
+              );
+              return (
+                <Link
+                  key={step.courseId}
+                  href={`/student/courses/${step.courseId}`}
+                  className="path-summary-step"
+                >
+                  <span className="path-order">{index + 1}</span>
+                  <span>{course?.title ?? step.courseId}</span>
+                </Link>
+              );
+            })}
+            <Link href="/student/path" className="text-link">
+              View and update my path →
+            </Link>
+          </div>
+        </section>
+      )}
+      {personal.length > 0 && (
+        <>
+          <div className="section-heading">
+            <div>
+              <h2>My AI courses</h2>
+              <p className="muted">Personal courses generated for you.</p>
+            </div>
+            <Link href="/student/studio" className="button secondary">
+              Create another
+            </Link>
+          </div>
+          <section className="course-grid">
+            {personal.map((course, index) => (
+              <CourseCard
+                key={course.id}
+                index={index}
+                course={course}
+                href={`/student/courses/${course.id}`}
+                footer={
+                  <span>
+                    Personal ·{" "}
+                    {calculateProgress(course, workspace.submissions, user.id)
+                      .percent}
+                    % complete
+                  </span>
+                }
+              />
+            ))}
+          </section>
+        </>
+      )}
       <div className="section-heading">
         <div>
           <h2>Discover a course</h2>
           <p className="muted">Explore real problems through practice.</p>
         </div>
+        <Link href="/student/path" className="button secondary">
+          Build my learning path
+        </Link>
       </div>
       <section className="course-grid">
-        {workspace.courses.map((course, index) => (
+        {catalog.map((course, index) => (
           <CourseCard
             key={course.id}
             index={index}

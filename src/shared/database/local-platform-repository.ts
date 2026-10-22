@@ -1,5 +1,42 @@
 import type { PlatformRepository, Repository } from "./repository";
-import { getActivities } from "@/shared/contracts";
+import {
+  getActivities,
+  type Course,
+  type CourseDocument,
+  type CourseDraft,
+  type LearningPathRecord,
+} from "@/shared/contracts";
+
+function draftOf(course: Course): CourseDraft {
+  return {
+    title: course.title,
+    description: course.description,
+    subject: course.subject,
+    audience: course.audience,
+    goals: course.goals,
+    lessons: course.lessons,
+  };
+}
+
+function publishedView(course: Course): Course {
+  if (!course.publishedContent) return course;
+  return { ...course, ...structuredClone(course.publishedContent) };
+}
+
+function toDocument(course: Course): CourseDocument {
+  return {
+    id: course.id,
+    ownerId: course.ownerId,
+    status: course.status,
+    visibility: course.visibility,
+    version: course.version,
+    publishedVersion: course.status === "published" ? course.version : null,
+    draftRevision: course.draftRevision ?? 1,
+    content: draftOf(course),
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt,
+  };
+}
 
 export function createLocalPlatformRepository(
   store: Repository,
@@ -7,11 +44,17 @@ export function createLocalPlatformRepository(
   return {
     async getWorkspace(actor) {
       const state = await store.read();
-      const courses = state.courses.filter((course) =>
-        actor.role === "teacher"
-          ? course.ownerId === actor.id
-          : course.status === "published" && course.visibility === "cohort",
-      );
+      const courses = state.courses
+        .filter((course) =>
+          actor.role === "teacher"
+            ? course.ownerId === actor.id
+            : (course.status === "published" &&
+                course.visibility === "cohort") ||
+              (course.ownerId === actor.id && course.visibility === "personal"),
+        )
+        .map((course) =>
+          actor.role === "teacher" ? course : publishedView(course),
+        );
       const ids = new Set(courses.map((course) => course.id));
       const enrollments = state.enrollments.filter((item) =>
         actor.role === "teacher"
@@ -43,9 +86,17 @@ export function createLocalPlatformRepository(
       };
     },
     async findCourse(id) {
-      return (
-        (await store.read()).courses.find((course) => course.id === id) ?? null
+      const course = (await store.read()).courses.find(
+        (item) => item.id === id,
       );
+      if (!course) return null;
+      return course.status === "published" ? publishedView(course) : course;
+    },
+    async getCourseDocument(id) {
+      const course = (await store.read()).courses.find(
+        (item) => item.id === id,
+      );
+      return course ? toDocument(course) : null;
     },
     async isEnrolled(courseId, studentId) {
       return (await store.read()).enrollments.some(
@@ -54,8 +105,50 @@ export function createLocalPlatformRepository(
     },
     async insertCourse(course) {
       return store.mutate((state) => {
-        state.courses.unshift(course);
-        return course;
+        const stored: Course = {
+          ...course,
+          draftRevision: course.draftRevision ?? 1,
+        };
+        state.courses.unshift(stored);
+        if (
+          stored.visibility === "personal" &&
+          stored.status === "published"
+        ) {
+          if (
+            !state.enrollments.some(
+              (item) =>
+                item.courseId === stored.id &&
+                item.studentId === stored.ownerId,
+            )
+          )
+            state.enrollments.push({
+              courseId: stored.id,
+              studentId: stored.ownerId,
+              joinedAt: new Date().toISOString(),
+            });
+        }
+        return stored;
+      });
+    },
+    async updateCourseDraft(
+      courseId,
+      ownerId,
+      expectedDraftRevision,
+      content,
+    ) {
+      return store.mutate((state) => {
+        const course = state.courses.find(
+          (item) => item.id === courseId && item.ownerId === ownerId,
+        );
+        if (!course) throw new Error("Course not found or access denied.");
+        if ((course.draftRevision ?? 1) !== expectedDraftRevision)
+          throw new Error(
+            "This course changed in another tab. Reload and try again.",
+          );
+        Object.assign(course, content);
+        course.draftRevision = expectedDraftRevision + 1;
+        course.updatedAt = new Date().toISOString();
+        return toDocument(course);
       });
     },
     async publishCourse(courseId, ownerId) {
@@ -64,20 +157,28 @@ export function createLocalPlatformRepository(
           (item) => item.id === courseId && item.ownerId === ownerId,
         );
         if (!course) throw new Error("Course not found or access denied.");
-        course.status = "published";
+        const content = structuredClone(draftOf(course));
+        const unchanged =
+          course.status === "published" &&
+          JSON.stringify(content) === JSON.stringify(course.publishedContent);
+        if (!unchanged) {
+          course.version =
+            course.status === "published" ? course.version + 1 : 1;
+          course.publishedContent = content;
+          course.status = "published";
+        }
         course.updatedAt = new Date().toISOString();
-        return course;
+        return publishedView(course);
       });
     },
     async enroll(courseId, studentId) {
       await store.mutate((state) => {
+        const course = state.courses.find((item) => item.id === courseId);
         if (
-          !state.courses.some(
-            (course) =>
-              course.id === courseId &&
-              course.status === "published" &&
-              course.visibility === "cohort",
-          )
+          !course ||
+          course.status !== "published" ||
+          (course.visibility !== "cohort" &&
+            !(course.visibility === "personal" && course.ownerId === studentId))
         )
           throw new Error("This course is not open for enrollment.");
         if (
@@ -95,12 +196,13 @@ export function createLocalPlatformRepository(
     },
     async insertSubmission(submission) {
       return store.mutate((state) => {
-        const course = state.courses.find(
-          (item) =>
-            item.id === submission.courseId && item.status === "published",
+        const stored = state.courses.find(
+          (item) => item.id === submission.courseId,
         );
+        const course = stored ? publishedView(stored) : undefined;
         if (
           !course ||
+          course.status !== "published" ||
           course.version !== submission.courseVersion ||
           !getActivities(course).some(
             (item) => item.id === submission.activityId,
@@ -140,6 +242,23 @@ export function createLocalPlatformRepository(
         )
           throw new Error("The student is not enrolled in this course.");
         state.feedback.push(feedback);
+      });
+    },
+    async getLearningPath(ownerId) {
+      return (
+        (await store.read()).learningPaths?.find(
+          (item) => item.ownerId === ownerId,
+        ) ?? null
+      );
+    },
+    async saveLearningPath(path: LearningPathRecord) {
+      return store.mutate((state) => {
+        state.learningPaths ??= [];
+        state.learningPaths = state.learningPaths.filter(
+          (item) => item.ownerId !== path.ownerId,
+        );
+        state.learningPaths.unshift(path);
+        return path;
       });
     },
   };

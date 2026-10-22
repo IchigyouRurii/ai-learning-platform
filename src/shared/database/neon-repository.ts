@@ -2,7 +2,10 @@ import type { Pool } from "pg";
 import {
   courseDraftSchema,
   type Course,
+  type CourseDocument,
+  type CourseDraft,
   type Enrollment,
+  type LearningPathRecord,
   type Submission,
   type TeacherFeedback,
   type User,
@@ -16,6 +19,18 @@ type CourseRow = {
   visibility: Course["visibility"];
   version: number;
   content: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+type CourseDocumentRow = {
+  id: string;
+  owner_id: string;
+  status: Course["status"];
+  visibility: Course["visibility"];
+  version: number;
+  published_version: number | null;
+  draft_revision: number;
+  draft_content: unknown;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -34,14 +49,31 @@ function courseFromRow(row: CourseRow): Course {
     updatedAt: timestamp(row.updated_at),
   };
 }
+function documentFromRow(row: CourseDocumentRow): CourseDocument {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    status: row.status,
+    visibility: row.visibility,
+    version: row.version,
+    publishedVersion: row.published_version,
+    draftRevision: row.draft_revision,
+    content: courseDraftSchema.parse(row.draft_content),
+    createdAt: timestamp(row.created_at),
+    updatedAt: timestamp(row.updated_at),
+  };
+}
+const documentColumns = `id, owner_id, status, visibility, version, published_version, draft_revision, draft_content, created_at, updated_at`;
 
 export function createNeonRepository(pool: Pool): PlatformRepository {
   return {
     async getWorkspace(actor) {
       const teacher = actor.role === "teacher";
       const courses = await pool.query<CourseRow>(
-        `select ${courseColumns} from ${courseFrom} where ${teacher ? "c.owner_id = $1" : "c.status = 'published' and c.visibility = 'cohort'"} order by c.created_at desc`,
-        teacher ? [actor.id] : [],
+        teacher
+          ? `select ${courseColumns} from ${courseFrom} where c.owner_id = $1 order by c.created_at desc`
+          : `select ${courseColumns} from ${courseFrom} where (c.status = 'published' and c.visibility = 'cohort') or (c.owner_id = $1 and c.visibility = 'personal') order by c.created_at desc`,
+        [actor.id],
       );
       const [enrollments, submissions, feedback, members] = await Promise.all([
         pool.query<Enrollment>(
@@ -88,6 +120,13 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       );
       return result.rows[0] ? courseFromRow(result.rows[0]) : null;
     },
+    async getCourseDocument(id) {
+      const result = await pool.query<CourseDocumentRow>(
+        `select ${documentColumns} from courses where id = $1`,
+        [id],
+      );
+      return result.rows[0] ? documentFromRow(result.rows[0]) : null;
+    },
     async isEnrolled(courseId, studentId) {
       return Boolean(
         (
@@ -100,52 +139,129 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
     },
     async insertCourse(course) {
       const { title, description, subject, audience, goals, lessons } = course;
-      await pool.query(
-        `insert into courses (id, owner_id, status, visibility, version, draft_content, created_at, updated_at) values ($1, $2, 'draft', $3, $4, $5::jsonb, $6, $7)`,
+      const content = {
+        title,
+        description,
+        subject,
+        audience,
+        goals,
+        lessons,
+      };
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query(
+          `insert into courses (id, owner_id, status, visibility, version, draft_content, created_at, updated_at) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+          [
+            course.id,
+            course.ownerId,
+            course.status,
+            course.visibility,
+            course.version,
+            JSON.stringify(content),
+            course.createdAt,
+            course.updatedAt,
+          ],
+        );
+        if (
+          course.visibility === "personal" &&
+          course.status === "published"
+        ) {
+          await client.query(
+            "insert into course_revisions (course_id, version, content) values ($1, $2, $3::jsonb)",
+            [course.id, course.version, JSON.stringify(content)],
+          );
+          await client.query(
+            "update courses set published_version = $2 where id = $1",
+            [course.id, course.version],
+          );
+          await client.query(
+            `insert into enrollments (course_id, student_id) values ($1, $2) on conflict do nothing`,
+            [course.id, course.ownerId],
+          );
+        }
+        await client.query("commit");
+        return course;
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async updateCourseDraft(
+      courseId,
+      ownerId,
+      expectedDraftRevision,
+      content: CourseDraft,
+    ) {
+      const result = await pool.query<CourseDocumentRow>(
+        `update courses set draft_content = $4::jsonb, draft_revision = draft_revision + 1, updated_at = now() where id = $1 and owner_id = $2 and draft_revision = $3 returning ${documentColumns}`,
         [
-          course.id,
-          course.ownerId,
-          course.visibility,
-          course.version,
-          JSON.stringify({
-            title,
-            description,
-            subject,
-            audience,
-            goals,
-            lessons,
-          }),
-          course.createdAt,
-          course.updatedAt,
+          courseId,
+          ownerId,
+          expectedDraftRevision,
+          JSON.stringify(courseDraftSchema.parse(content)),
         ],
       );
-      return course;
+      if (!result.rows[0])
+        throw new Error(
+          "This course changed in another tab or does not belong to you. Reload and try again.",
+        );
+      return documentFromRow(result.rows[0]);
     },
     async publishCourse(courseId, ownerId) {
       const client = await pool.connect();
       try {
         await client.query("begin");
-        const result = await client.query<CourseRow>(
-          `select c.id, c.owner_id, c.status, c.visibility, c.version, c.draft_content as content, c.created_at, c.updated_at from courses c where c.id = $1 and c.owner_id = $2 for update`,
+        const result = await client.query<{
+          id: string;
+          owner_id: string;
+          status: Course["status"];
+          visibility: Course["visibility"];
+          version: number;
+          published_version: number | null;
+          draft_content: unknown;
+          created_at: Date | string;
+          updated_at: Date | string;
+        }>(
+          `select id, owner_id, status, visibility, version, published_version, draft_content, created_at, updated_at from courses where id = $1 and owner_id = $2 for update`,
           [courseId, ownerId],
         );
         const row = result.rows[0];
         if (!row) throw new Error("Course not found or access denied.");
-        if (row.status !== "published") {
-          courseDraftSchema.parse(row.content);
+        const content = courseDraftSchema.parse(row.draft_content);
+        let unchanged = false;
+        if (row.status === "published" && row.published_version !== null) {
+          const same = await client.query<{ same: boolean }>(
+            `select content = $3::jsonb as same from course_revisions where course_id = $1 and version = $2`,
+            [courseId, row.published_version, JSON.stringify(content)],
+          );
+          unchanged = same.rows[0]?.same === true;
+        }
+        const version =
+          row.status === "published" ? row.version + 1 : row.version;
+        if (!unchanged) {
           await client.query(
             "insert into course_revisions (course_id, version, content) values ($1, $2, $3::jsonb)",
-            [courseId, row.version, JSON.stringify(row.content)],
+            [courseId, version, JSON.stringify(content)],
           );
-          const updated = await client.query(
-            "update courses set status = 'published', published_version = version, updated_at = now() where id = $1 returning updated_at",
-            [courseId],
+          await client.query(
+            "update courses set status = 'published', version = $2, published_version = $2, updated_at = now() where id = $1 returning updated_at",
+            [courseId, version],
           );
-          row.status = "published";
-          row.updated_at = updated.rows[0].updated_at;
         }
         await client.query("commit");
-        return courseFromRow(row);
+        return {
+          ...content,
+          id: row.id,
+          ownerId: row.owner_id,
+          status: "published" as const,
+          visibility: row.visibility,
+          version: unchanged ? row.version : version,
+          createdAt: timestamp(row.created_at),
+          updatedAt: new Date().toISOString(),
+        };
       } catch (error) {
         await client.query("rollback");
         throw error;
@@ -155,7 +271,7 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
     },
     async enroll(courseId, studentId) {
       const result = await pool.query(
-        `insert into enrollments (course_id, student_id) select id, $2 from courses where id = $1 and status = 'published' and visibility = 'cohort' on conflict (course_id, student_id) do update set joined_at = enrollments.joined_at returning course_id`,
+        `insert into enrollments (course_id, student_id) select id, $2 from courses where id = $1 and status = 'published' and (visibility = 'cohort' or (visibility = 'personal' and owner_id = $2)) on conflict (course_id, student_id) do update set joined_at = enrollments.joined_at returning course_id`,
         [courseId, studentId],
       );
       if (!result.rowCount)
@@ -200,6 +316,23 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       );
       if (!result.rowCount)
         throw new Error("Access denied or student not enrolled.");
+    },
+    async getLearningPath(ownerId) {
+      const result = await pool.query<{
+        learning_path: LearningPathRecord | null;
+      }>(
+        "select learning_path from learning_profiles where user_id = $1",
+        [ownerId],
+      );
+      const path = result.rows[0]?.learning_path;
+      return path && Object.keys(path).length ? path : null;
+    },
+    async saveLearningPath(path) {
+      await pool.query(
+        `insert into learning_profiles (user_id, learning_path, updated_at) values ($1, $2::jsonb, now()) on conflict (user_id) do update set learning_path = excluded.learning_path, updated_at = now()`,
+        [path.ownerId, JSON.stringify(path)],
+      );
+      return path;
     },
   };
 }

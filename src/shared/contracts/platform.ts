@@ -1,4 +1,4 @@
-import type { Course } from "./course";
+import type { Course, CourseDraft } from "./course";
 
 export type Role = "teacher" | "student" | "admin";
 export type User = { id: string; name: string; role: Role };
@@ -25,12 +25,41 @@ export type TeacherFeedback = {
   message: string;
   createdAt: string;
 };
+/** Author-facing course record. `content` may contain quiz answer keys. */
+export type CourseDocument = {
+  id: string;
+  ownerId: string;
+  status: Course["status"];
+  visibility: Course["visibility"];
+  version: number;
+  publishedVersion: number | null;
+  draftRevision: number;
+  content: CourseDraft;
+  createdAt: string;
+  updatedAt: string;
+};
+export type LearningPathStep = {
+  courseId: string;
+  courseVersion: number;
+  order: number;
+  targetMinutes: number;
+  reason: string;
+};
+export type LearningPathRecord = {
+  id: string;
+  ownerId: string;
+  title: string;
+  steps: LearningPathStep[];
+  createdAt: string;
+  updatedAt: string;
+};
 export type DemoState = {
   schemaVersion: 1;
   courses: Course[];
   enrollments: Enrollment[];
   submissions: Submission[];
   feedback: TeacherFeedback[];
+  learningPaths?: LearningPathRecord[];
 };
 export type Workspace = DemoState & { members: User[] };
 export type ActionResult<T> =

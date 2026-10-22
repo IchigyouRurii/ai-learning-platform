@@ -5,11 +5,13 @@ import {
   getActivities,
   type CourseDraft,
   type Course,
+  type CourseDocument,
+  type LearningPathRecord,
   type User,
   type Submission,
 } from "@/shared/contracts";
 import { getRepository } from "@/shared/database";
-import { assertCourseOwner, assertStudent, assertTeacher } from "./access";
+import { assertStudent, assertTeacher } from "./access";
 
 export async function getWorkspace(actor: User) {
   if (actor.role === "teacher") assertTeacher(actor);
@@ -31,36 +33,93 @@ async function requireLearningAccess(actor: User, course: Course) {
     throw new Error("Please enroll in this course first.");
 }
 
+function assertCanAuthor(
+  actor: User,
+  document: CourseDocument,
+): asserts actor is User {
+  if (document.ownerId !== actor.id)
+    throw new Error("You do not have permission to manage this course.");
+  if (actor.role === "teacher" && document.visibility !== "cohort")
+    throw new Error("Teachers can only manage classroom courses.");
+  if (actor.role === "student" && document.visibility !== "personal")
+    throw new Error("Students can only manage their own personal courses.");
+  if (actor.role !== "teacher" && actor.role !== "student")
+    throw new Error("This account cannot author courses.");
+}
+
 export async function createCourse(
   actor: User,
   input: CourseDraft,
+  options: { visibility?: Course["visibility"]; publish?: boolean } = {},
 ): Promise<Course> {
-  assertTeacher(actor);
   const parsed = courseDraftSchema.parse(input);
+  let visibility: Course["visibility"];
+  let published: boolean;
+  if (actor.role === "teacher") {
+    visibility = "cohort";
+    published = false;
+  } else if (actor.role === "student") {
+    if (options.visibility && options.visibility !== "personal")
+      throw new Error("Students can only create personal courses.");
+    visibility = "personal";
+    published = true;
+  } else {
+    throw new Error("This account cannot create courses.");
+  }
   const now = new Date().toISOString();
   return getRepository().insertCourse({
     ...parsed,
     id: randomUUID(),
     ownerId: actor.id,
-    status: "draft",
-    visibility: "cohort",
+    status: published ? "published" : "draft",
+    visibility,
     version: 1,
     createdAt: now,
     updatedAt: now,
+    draftRevision: 1,
+    ...(published ? { publishedContent: structuredClone(parsed) } : {}),
   });
 }
 
+export async function getCourseDocumentForAuthor(
+  actor: User,
+  id: string,
+): Promise<CourseDocument> {
+  const document = await getRepository().getCourseDocument(id);
+  if (!document) throw new Error("Course not found.");
+  assertCanAuthor(actor, document);
+  return document;
+}
+
+export async function updateCourseDraft(
+  actor: User,
+  id: string,
+  expectedDraftRevision: number,
+  content: CourseDraft,
+): Promise<CourseDocument> {
+  await getCourseDocumentForAuthor(actor, id);
+  return getRepository().updateCourseDraft(
+    id,
+    actor.id,
+    expectedDraftRevision,
+    courseDraftSchema.parse(content),
+  );
+}
+
 export async function publishCourse(actor: User, id: string) {
-  const course = await requireCourse(id);
-  assertCourseOwner(actor, course);
-  courseDraftSchema.parse(course);
+  const document = await getRepository().getCourseDocument(id);
+  if (!document) throw new Error("Course not found.");
+  assertCanAuthor(actor, document);
+  courseDraftSchema.parse(document.content);
   return getRepository().publishCourse(id, actor.id);
 }
 
 export async function enrollCourse(actor: User, id: string) {
   assertStudent(actor);
   const course = await requireCourse(id);
-  if (course.status !== "published" || course.visibility !== "cohort")
+  const personalOwner =
+    course.visibility === "personal" && course.ownerId === actor.id;
+  if (course.status !== "published" || (course.visibility !== "cohort" && !personalOwner))
     throw new Error("This course is not open for enrollment.");
   await getRepository().enroll(id, actor.id);
 }
@@ -105,7 +164,10 @@ export async function addTeacherFeedback(
   studentId: string,
   message: string,
 ) {
-  assertCourseOwner(actor, await requireCourse(courseId));
+  assertTeacher(actor);
+  const course = await requireCourse(courseId);
+  if (course.ownerId !== actor.id)
+    throw new Error("You do not have permission to manage this course.");
   if (!(await getRepository().isEnrolled(courseId, studentId)))
     throw new Error("The student is not enrolled in this course.");
   await getRepository().insertFeedback({
@@ -115,6 +177,26 @@ export async function addTeacherFeedback(
     teacherId: actor.id,
     message,
     createdAt: new Date().toISOString(),
+  });
+}
+
+export async function getLearningPath(actor: User) {
+  assertStudent(actor);
+  return getRepository().getLearningPath(actor.id);
+}
+
+export async function saveLearningPath(
+  actor: User,
+  input: Omit<LearningPathRecord, "id" | "ownerId" | "createdAt" | "updatedAt">,
+) {
+  assertStudent(actor);
+  const now = new Date().toISOString();
+  return getRepository().saveLearningPath({
+    ...input,
+    id: randomUUID(),
+    ownerId: actor.id,
+    createdAt: now,
+    updatedAt: now,
   });
 }
 

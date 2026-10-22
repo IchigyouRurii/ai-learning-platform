@@ -25,7 +25,17 @@ type Inputs = {
       : never;
   };
 };
-const content = { course: createSeedState().courses[0], activities: [] };
+const content = { course: legacyCourse(), activities: [] };
+function legacyCourse() {
+  const course = structuredClone(createSeedState().courses[0]);
+  course.lessons = course.lessons.map((lesson) => ({
+    ...lesson,
+    blocks: lesson.blocks.filter(
+      (block) => block.type !== "activity" || block.activity.type === "reflection",
+    ),
+  }));
+  return course;
+}
 const path = {
   title: "入门",
   steps: [

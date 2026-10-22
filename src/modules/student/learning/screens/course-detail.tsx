@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Target } from "lucide-react";
+import { ArrowLeft, Pencil, Target } from "lucide-react";
 import {
   calculateProgress,
   getCurrentUser,
   getWorkspace,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
+import { toSafeActivity } from "@/shared/contracts";
 import { Badge, PageHeading, ProgressBar } from "@/shared/ui/primitives";
 import { ActivityForm } from "../../activities/components/activity-form";
 import { EnrollButton } from "../../activities/components/enroll-button";
+import { QuizForm } from "../../activities/components/quiz-form";
 
 export async function StudentCourseDetail({ id }: { id: string }) {
   const user = await getCurrentUser();
@@ -29,6 +31,17 @@ export async function StudentCourseDetail({ id }: { id: string }) {
         eyebrow={course.subject}
         title={course.title}
         description={course.description}
+        action={
+          course.visibility === "personal" ? (
+            <Link
+              href={`/student/courses/${course.id}/edit`}
+              className="button secondary"
+            >
+              <Pencil size={15} />
+              Edit course
+            </Link>
+          ) : undefined
+        }
       />
       <div className="detail-grid">
         <div>
@@ -53,8 +66,17 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                   LESSON {String(index + 1).padStart(2, "0")}
                 </p>
                 <h2>{lesson.title}</h2>
-                {lesson.blocks.map((block) =>
-                  block.type === "text" ? (
+                {lesson.blocks.map((block) => {
+                  const latest =
+                    block.type === "activity"
+                      ? workspace.submissions.findLast(
+                          (item) =>
+                            item.courseId === course.id &&
+                            item.courseVersion === course.version &&
+                            item.activityId === block.activity.id,
+                        )
+                      : undefined;
+                  return block.type === "text" ? (
                     <p className="prose-text" key={block.id}>
                       {block.body}
                     </p>
@@ -64,12 +86,15 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                       key={block.id}
                       courseId={course.id}
                       activity={block.activity}
-                      latest={workspace.submissions.findLast(
-                        (item) =>
-                          item.courseId === course.id &&
-                          item.courseVersion === course.version &&
-                          item.activityId === block.activity.id,
-                      )}
+                      latest={latest}
+                    />
+                  ) : block.type === "activity" &&
+                    block.activity.type === "quiz" ? (
+                    <QuizForm
+                      key={block.id}
+                      courseId={course.id}
+                      activity={toSafeActivity(block.activity)}
+                      latest={latest}
                     />
                   ) : (
                     <div key={block.id} className="activity-preview">
@@ -80,8 +105,8 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                           : block.type}
                       </p>
                     </div>
-                  ),
-                )}
+                  );
+                })}
               </section>
             ))
           )}
