@@ -59,12 +59,39 @@ export function QuizForm({
   courseId,
   activity,
   latest,
+  history = [],
 }: {
   courseId: string;
   activity: SafeActivity;
   latest?: Submission;
+  history?: Submission[];
 }) {
   const questions = activity.questions ?? [];
+
+  function prettyAnswer(answer: string) {
+    try {
+      const parsed = JSON.parse(answer) as {
+        questionId?: string;
+        selectedOptionIds?: string[];
+      }[];
+      if (!Array.isArray(parsed)) return answer;
+      return parsed
+        .map((item, index) => {
+          const question = questions.find((q) => q.id === item.questionId);
+          const selected = (item.selectedOptionIds ?? [])
+            .map(
+              (id) =>
+                question?.options.find((option) => option.id === id)?.text ??
+                id,
+            )
+            .join(", ");
+          return `Q${index + 1}: ${selected || "(no answer)"}`;
+        })
+        .join("; ");
+    } catch {
+      return answer;
+    }
+  }
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
   const [error, setError] = useState("");
@@ -197,6 +224,22 @@ export function QuizForm({
           </div>
           <p className="prose-text">{latest.aiFeedback}</p>
         </div>
+      )}
+      {history.length > 0 && (
+        <details className="attempt-history">
+          <summary>AI feedback history ({history.length})</summary>
+          {history.map((item) => (
+            <article key={item.id}>
+              <small>
+                {new Date(item.createdAt).toLocaleString("en-US", {
+                  timeZone: "Asia/Shanghai",
+                })}
+              </small>
+              <p className="prose-text">{prettyAnswer(item.answer)}</p>
+              <p className="muted">{item.aiFeedback}</p>
+            </article>
+          ))}
+        </details>
       )}
     </section>
   );

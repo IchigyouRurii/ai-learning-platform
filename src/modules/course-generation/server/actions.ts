@@ -6,6 +6,7 @@ import {
   createCourse,
   getCurrentUser,
   publishCourse,
+  recordGeneration,
   updateCourseDraft,
 } from "@/modules/platform";
 import type {
@@ -25,7 +26,13 @@ export async function generateCourseAction(
     const actor = await getCurrentUser();
     if (actor.role !== "teacher" && actor.role !== "student")
       throw new Error("This account cannot generate courses.");
-    return { ok: true, data: await generateCourse(input) };
+    const course = await generateCourse(input);
+    await recordGeneration(actor, {
+      kind: "course",
+      input,
+      result: course,
+    });
+    return { ok: true, data: course };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }
@@ -88,6 +95,9 @@ export async function publishCourseRevisionAction(
 }
 
 const rewriteSchema = z.object({
+  courseId: z.string().min(1),
+  lessonId: z.string().min(1).max(200),
+  blockId: z.string().min(1).max(200),
   courseTitle: z.string().trim().min(1).max(160),
   lessonTitle: z.string().trim().min(1).max(160),
   body: z.string().trim().min(1).max(16000),
@@ -106,7 +116,14 @@ export async function rewriteTextAction(
     const actor = await getCurrentUser();
     if (actor.role !== "teacher" && actor.role !== "student")
       throw new Error("This account cannot edit courses.");
-    return { ok: true, data: { text: await rewriteText(input) } };
+    const text = await rewriteText(input);
+    await recordGeneration(actor, {
+      kind: "rewrite",
+      courseId: input.courseId,
+      input,
+      result: { text },
+    });
+    return { ok: true, data: { text } };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }

@@ -34,6 +34,10 @@ export async function runDatabaseTask(
     console.error(
       `数据库操作失败${code}。请检查 .env、网络和数据库初始化状态；连接串不会打印到终端。`,
     );
+    if (process.env.DEBUG_DB === "1")
+      console.error(
+        error instanceof Error ? error.message : "Unknown database error.",
+      );
     process.exitCode = 1;
   } finally {
     if (pool) await pool.end();

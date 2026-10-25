@@ -6,6 +6,8 @@ import {
   type CourseDraft,
   type Course,
   type CourseDocument,
+  type GenerationKind,
+  type GenerationRecord,
   type LearningPathRecord,
   type User,
   type Submission,
@@ -183,6 +185,47 @@ export async function addTeacherFeedback(
 export async function getLearningPath(actor: User) {
   assertStudent(actor);
   return getRepository().getLearningPath(actor.id);
+}
+
+export async function listLearningPaths(actor: User) {
+  assertStudent(actor);
+  return getRepository().listLearningPaths(actor.id);
+}
+
+export async function listGenerationRecords(
+  actor: User,
+  options: { kind?: GenerationKind; courseId?: string; limit?: number } = {},
+) {
+  if (actor.role !== "teacher" && actor.role !== "student")
+    throw new Error("This account cannot read AI history.");
+  return getRepository().listGenerationRecords(actor.id, options);
+}
+
+export async function recordGeneration(
+  actor: User,
+  input: {
+    kind: GenerationKind;
+    courseId?: string | null;
+    input: unknown;
+    result: unknown;
+  },
+) {
+  if (actor.role !== "teacher" && actor.role !== "student")
+    throw new Error("This account cannot record AI history.");
+  if (input.courseId) {
+    const document = await getRepository().getCourseDocument(input.courseId);
+    if (!document || document.ownerId !== actor.id)
+      throw new Error("You do not have permission to record this course.");
+  }
+  return getRepository().insertGenerationRecord({
+    id: randomUUID(),
+    ownerId: actor.id,
+    kind: input.kind,
+    courseId: input.courseId ?? null,
+    input: input.input,
+    result: input.result,
+    createdAt: new Date().toISOString(),
+  });
 }
 
 export async function saveLearningPath(

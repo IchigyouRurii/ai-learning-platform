@@ -3,6 +3,8 @@ import type {
   CourseDocument,
   CourseDraft,
   DemoState,
+  GenerationKind,
+  GenerationRecord,
   LearningPathRecord,
   Submission,
   TeacherFeedback,
@@ -33,5 +35,11 @@ export interface PlatformRepository {
   insertSubmission(submission: Submission): Promise<Submission>;
   insertFeedback(feedback: TeacherFeedback): Promise<void>;
   getLearningPath(ownerId: string): Promise<LearningPathRecord | null>;
+  listLearningPaths(ownerId: string): Promise<LearningPathRecord[]>;
   saveLearningPath(path: LearningPathRecord): Promise<LearningPathRecord>;
+  insertGenerationRecord(record: GenerationRecord): Promise<GenerationRecord>;
+  listGenerationRecords(
+    ownerId: string,
+    options?: { kind?: GenerationKind; courseId?: string; limit?: number },
+  ): Promise<GenerationRecord[]>;
 }

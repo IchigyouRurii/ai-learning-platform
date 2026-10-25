@@ -14,6 +14,15 @@ import {
 import { FeedbackForm } from "../components/feedback-form";
 import type { Course } from "@/shared/contracts";
 
+function activityTitle(course: Course, activityId: string) {
+  const block = course.lessons
+    .flatMap((lesson) => lesson.blocks)
+    .find(
+      (item) => item.type === "activity" && item.activity.id === activityId,
+    );
+  return block?.type === "activity" ? block.activity.title : activityId;
+}
+
 function readableAnswer(course: Course, activityId: string, answer: string) {
   try {
     const parsed = JSON.parse(answer) as unknown;
@@ -85,17 +94,15 @@ export async function TeacherStudents() {
             workspace.submissions,
             enrollment.studentId,
           );
-          const submissions = workspace.submissions.filter(
-            (item) =>
-              item.courseId === course.id &&
-              item.studentId === enrollment.studentId &&
-              item.courseVersion === course.version,
-          );
-          const latestByActivity = [
-            ...new Map(
-              submissions.map((item) => [item.activityId, item]),
-            ).values(),
-          ];
+          const submissions = workspace.submissions
+            .filter(
+              (item) =>
+                item.courseId === course.id &&
+                item.studentId === enrollment.studentId &&
+                item.courseVersion === course.version,
+            )
+            .slice()
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
           return (
             <section
               className="panel learner-panel"
@@ -125,10 +132,15 @@ export async function TeacherStudents() {
                   {progress.done} / {progress.total} activities
                 </span>
               </div>
-              {latestByActivity.length ? (
-                latestByActivity.map((submission) => (
+              {submissions.length ? (
+                submissions.map((submission) => (
                   <details className="submission-detail" key={submission.id}>
-                    <summary>View latest answers and feedback</summary>
+                    <summary>
+                      {activityTitle(course, submission.activityId)} ·{" "}
+                      {new Date(submission.createdAt).toLocaleString("en-US", {
+                        timeZone: "Asia/Shanghai",
+                      })}
+                    </summary>
                     <h4>Student answer</h4>
                     <p className="prose-text">
                       {readableAnswer(

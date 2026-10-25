@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import {
   getCourseDocumentForAuthor,
   getCurrentUser,
+  listGenerationRecords,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { PageHeading } from "@/shared/ui/primitives";
@@ -21,6 +22,11 @@ export default async function EditTeacherCoursePage({
     () => null,
   );
   if (!document) notFound();
+  const rewriteHistory = await listGenerationRecords(user, {
+    kind: "rewrite",
+    courseId: id,
+    limit: 20,
+  });
   return (
     <>
       <Link href={`/teacher/courses/${id}`} className="back-link">
@@ -38,6 +44,7 @@ export default async function EditTeacherCoursePage({
         initialDraftRevision={document.draftRevision}
         publishedVersion={document.publishedVersion}
         mode="teacher"
+        rewriteHistory={rewriteHistory}
       />
     </>
   );

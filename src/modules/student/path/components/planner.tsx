@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Check, Route, Save, Sparkles } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  History,
+  RotateCcw,
+  Route,
+  Save,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import type {
   Course,
@@ -16,12 +24,14 @@ type Draft = { title: string; steps: LearningPathStep[] };
 export function LearningPathPlanner({
   courses,
   savedPath,
+  history = [],
 }: {
   courses: Pick<
     Course,
     "id" | "version" | "title" | "subject" | "description" | "lessons"
   >[];
   savedPath: LearningPathRecord | null;
+  history?: LearningPathRecord[];
 }) {
   const [profile, setProfile] = useState({
     background: "University student with basic computer skills",
@@ -40,7 +50,8 @@ export function LearningPathPlanner({
   const courseById = new Map(courses.map((course) => [course.id, course]));
 
   return (
-    <div className="builder-grid">
+    <>
+      <div className="builder-grid">
       <section className="panel builder-input">
         <div className="panel-heading">
           <span className="step-number">01</span>
@@ -217,6 +228,50 @@ export function LearningPathPlanner({
           </p>
         )}
       </section>
-    </div>
+      </div>
+      {history.length > 0 && (
+        <section className="panel history-panel">
+          <div className="section-heading">
+            <div>
+              <h2>
+                <History size={18} />
+                Saved path history
+              </h2>
+              <p className="muted">
+                Earlier paths are kept so you can revisit or reuse them.
+              </p>
+            </div>
+          </div>
+          <ul className="history-list">
+            {history.map((path) => (
+              <li key={path.id}>
+                <div>
+                  <strong>{path.title}</strong>
+                  <small>
+                    {path.steps.length} courses ·{" "}
+                    {new Date(path.createdAt).toLocaleString("en-US", {
+                      timeZone: "Asia/Shanghai",
+                    })}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => {
+                    setDraft({ title: path.title, steps: path.steps });
+                    setSaved(true);
+                    setMessage("");
+                    setError("");
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  Load
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

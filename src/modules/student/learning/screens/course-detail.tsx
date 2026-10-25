@@ -67,15 +67,21 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                 </p>
                 <h2>{lesson.title}</h2>
                 {lesson.blocks.map((block) => {
-                  const latest =
+                  const attempts =
                     block.type === "activity"
-                      ? workspace.submissions.findLast(
-                          (item) =>
-                            item.courseId === course.id &&
-                            item.courseVersion === course.version &&
-                            item.activityId === block.activity.id,
-                        )
-                      : undefined;
+                      ? workspace.submissions
+                          .filter(
+                            (item) =>
+                              item.courseId === course.id &&
+                              item.courseVersion === course.version &&
+                              item.activityId === block.activity.id,
+                          )
+                          .slice()
+                          .sort((a, b) =>
+                            b.createdAt.localeCompare(a.createdAt),
+                          )
+                      : [];
+                  const latest = attempts[0];
                   return block.type === "text" ? (
                     <p className="prose-text" key={block.id}>
                       {block.body}
@@ -87,6 +93,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                       courseId={course.id}
                       activity={block.activity}
                       latest={latest}
+                      history={attempts}
                     />
                   ) : block.type === "activity" &&
                     block.activity.type === "quiz" ? (
@@ -95,6 +102,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                       courseId={course.id}
                       activity={toSafeActivity(block.activity)}
                       latest={latest}
+                      history={attempts}
                     />
                   ) : (
                     <div key={block.id} className="activity-preview">

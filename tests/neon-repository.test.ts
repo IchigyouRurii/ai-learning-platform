@@ -36,6 +36,7 @@ beforeAll(async () => {
   for (const name of [
     "202610170001_neon.sql",
     "202610220001_course_editing.sql",
+    "202610250001_ai_history.sql",
   ])
     await postgres.database.exec(
       await readFile(
@@ -130,5 +131,76 @@ describe("Neon SQL repository", () => {
     expect((await repository.getWorkspace(teacher)).members[0].name).toBe(
       student.name,
     );
+  });
+  it("inserts a published personal course, its revision and enrollment atomically", async () => {
+    const personal: Course = {
+      ...draft(),
+      id: "personal-1",
+      ownerId: student.id,
+      visibility: "personal",
+      status: "published",
+      publishedContent: undefined,
+    };
+    await repository.insertCourse(personal);
+    const revisions = await postgres.pool.query(
+      "select version from course_revisions where course_id = $1",
+      [personal.id],
+    );
+    expect(revisions.rows).toHaveLength(1);
+    const enrollment = await postgres.pool.query(
+      "select 1 from enrollments where course_id = $1 and student_id = $2",
+      [personal.id, student.id],
+    );
+    expect(enrollment.rowCount).toBe(1);
+    expect(
+      (await repository.getWorkspace(student)).courses.some(
+        (course) => course.id === personal.id,
+      ),
+    ).toBe(true);
+  });
+  it("persists AI generation records and every saved learning path", async () => {
+    const now = Date.now();
+    await repository.insertGenerationRecord({
+      id: "generation-1",
+      ownerId: teacher.id,
+      kind: "course",
+      courseId: null,
+      input: { topic: "需求分析" },
+      result: { title: "课程" },
+      createdAt: new Date(now).toISOString(),
+    });
+    const records = await repository.listGenerationRecords(teacher.id, {
+      kind: "course",
+    });
+    expect(records).toHaveLength(1);
+    expect(records[0].input).toEqual({ topic: "需求分析" });
+    expect(records[0].result).toEqual({ title: "课程" });
+
+    const path = (id: string, title: string, createdAt: string) => ({
+      id,
+      ownerId: student.id,
+      title,
+      steps: [
+        {
+          courseId: "course-1",
+          courseVersion: 1,
+          order: 0,
+          targetMinutes: 30,
+          reason: "起点",
+        },
+      ],
+      createdAt,
+      updatedAt: createdAt,
+    });
+    await repository.saveLearningPath(
+      path("path-1", "旧路径", new Date(now).toISOString()),
+    );
+    await repository.saveLearningPath(
+      path("path-2", "新路径", new Date(now + 1000).toISOString()),
+    );
+    const paths = await repository.listLearningPaths(student.id);
+    expect(paths).toHaveLength(2);
+    expect(paths[0].title).toBe("新路径");
+    expect((await repository.getLearningPath(student.id))?.title).toBe("新路径");
   });
 });

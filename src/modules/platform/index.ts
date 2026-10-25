@@ -12,7 +12,10 @@ export {
   getCourseDocumentForAuthor,
   updateCourseDraft,
   getLearningPath,
+  listLearningPaths,
   saveLearningPath,
+  listGenerationRecords,
+  recordGeneration,
 } from "./server/services";
 
 export {

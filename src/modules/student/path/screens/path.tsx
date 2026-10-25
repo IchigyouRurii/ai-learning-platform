@@ -2,6 +2,7 @@ import {
   getCurrentUser,
   getLearningPath,
   getWorkspace,
+  listLearningPaths,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { PageHeading } from "@/shared/ui/primitives";
@@ -10,9 +11,10 @@ import { LearningPathPlanner } from "../components/planner";
 export async function StudentLearningPath() {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
-  const [workspace, savedPath] = await Promise.all([
+  const [workspace, savedPath, pathHistory] = await Promise.all([
     getWorkspace(user),
     getLearningPath(user),
+    listLearningPaths(user),
   ]);
   const courses = workspace.courses
     .filter(
@@ -33,7 +35,11 @@ export async function StudentLearningPath() {
         title="A route built around your goal."
         description="AI orders published micro-courses by difficulty and your available time. You can save the plan and follow it at your own pace."
       />
-      <LearningPathPlanner courses={courses} savedPath={savedPath} />
+      <LearningPathPlanner
+        courses={courses}
+        savedPath={savedPath}
+        history={pathHistory}
+      />
     </>
   );
 }

@@ -5,6 +5,8 @@ import {
   type CourseDocument,
   type CourseDraft,
   type Enrollment,
+  type GenerationKind,
+  type GenerationRecord,
   type LearningPathRecord,
   type Submission,
   type TeacherFeedback,
@@ -150,14 +152,20 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       const client = await pool.connect();
       try {
         await client.query("begin");
+        // The courses_check constraint requires published_version to be set in
+        // the same statement as status='published'. The revision FK is
+        // deferrable, so the revision can be inserted immediately afterwards.
+        const publishedVersion =
+          course.status === "published" ? course.version : null;
         await client.query(
-          `insert into courses (id, owner_id, status, visibility, version, draft_content, created_at, updated_at) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+          `insert into courses (id, owner_id, status, visibility, version, published_version, draft_content, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
           [
             course.id,
             course.ownerId,
             course.status,
             course.visibility,
             course.version,
+            publishedVersion,
             JSON.stringify(content),
             course.createdAt,
             course.updatedAt,
@@ -170,10 +178,6 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           await client.query(
             "insert into course_revisions (course_id, version, content) values ($1, $2, $3::jsonb)",
             [course.id, course.version, JSON.stringify(content)],
-          );
-          await client.query(
-            "update courses set published_version = $2 where id = $1",
-            [course.id, course.version],
           );
           await client.query(
             `insert into enrollments (course_id, student_id) values ($1, $2) on conflict do nothing`,
@@ -318,21 +322,128 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         throw new Error("Access denied or student not enrolled.");
     },
     async getLearningPath(ownerId) {
-      const result = await pool.query<{
+      const stored = await pool.query<{
+        id: string;
+        owner_id: string;
+        title: string;
+        steps: LearningPathRecord["steps"];
+        created_at: Date | string;
+      }>(
+        "select id, owner_id, title, steps, created_at from learning_paths where owner_id = $1 order by created_at desc limit 1",
+        [ownerId],
+      );
+      const row = stored.rows[0];
+      if (row)
+        return {
+          id: row.id,
+          ownerId: row.owner_id,
+          title: row.title,
+          steps: row.steps,
+          createdAt: timestamp(row.created_at),
+          updatedAt: timestamp(row.created_at),
+        };
+      // Fall back to the single path stored before history was introduced.
+      const legacy = await pool.query<{
         learning_path: LearningPathRecord | null;
       }>(
         "select learning_path from learning_profiles where user_id = $1",
         [ownerId],
       );
-      const path = result.rows[0]?.learning_path;
+      const path = legacy.rows[0]?.learning_path;
       return path && Object.keys(path).length ? path : null;
     },
-    async saveLearningPath(path) {
-      await pool.query(
-        `insert into learning_profiles (user_id, learning_path, updated_at) values ($1, $2::jsonb, now()) on conflict (user_id) do update set learning_path = excluded.learning_path, updated_at = now()`,
-        [path.ownerId, JSON.stringify(path)],
+    async listLearningPaths(ownerId) {
+      const result = await pool.query<{
+        id: string;
+        owner_id: string;
+        title: string;
+        steps: LearningPathRecord["steps"];
+        created_at: Date | string;
+      }>(
+        "select id, owner_id, title, steps, created_at from learning_paths where owner_id = $1 order by created_at desc limit 50",
+        [ownerId],
       );
-      return path;
+      return result.rows.map((row) => ({
+        id: row.id,
+        ownerId: row.owner_id,
+        title: row.title,
+        steps: row.steps,
+        createdAt: timestamp(row.created_at),
+        updatedAt: timestamp(row.created_at),
+      }));
+    },
+    async saveLearningPath(path) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        await client.query(
+          "insert into learning_paths (id, owner_id, title, steps, created_at) values ($1, $2, $3, $4::jsonb, $5)",
+          [path.id, path.ownerId, path.title, JSON.stringify(path.steps), path.createdAt],
+        );
+        await client.query(
+          `insert into learning_profiles (user_id, learning_path, updated_at) values ($1, $2::jsonb, now()) on conflict (user_id) do update set learning_path = excluded.learning_path, updated_at = now()`,
+          [path.ownerId, JSON.stringify(path)],
+        );
+        await client.query("commit");
+        return path;
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async insertGenerationRecord(record) {
+      await pool.query(
+        "insert into generation_records (id, owner_id, kind, course_id, input, result, created_at) values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)",
+        [
+          record.id,
+          record.ownerId,
+          record.kind,
+          record.courseId,
+          JSON.stringify(record.input),
+          record.result === null ? null : JSON.stringify(record.result),
+          record.createdAt,
+        ],
+      );
+      return record;
+    },
+    async listGenerationRecords(
+      ownerId,
+      options: { kind?: GenerationKind; courseId?: string; limit?: number } = {},
+    ) {
+      const conditions = ["owner_id = $1"];
+      const values: unknown[] = [ownerId];
+      if (options.kind) {
+        values.push(options.kind);
+        conditions.push(`kind = $${values.length}`);
+      }
+      if (options.courseId) {
+        values.push(options.courseId);
+        conditions.push(`course_id = $${values.length}`);
+      }
+      values.push(options.limit ?? 20);
+      const result = await pool.query<{
+        id: string;
+        owner_id: string;
+        kind: GenerationKind;
+        course_id: string | null;
+        input: unknown;
+        result: unknown;
+        created_at: Date | string;
+      }>(
+        `select id, owner_id, kind, course_id, input, result, created_at from generation_records where ${conditions.join(" and ")} order by created_at desc limit $${values.length}`,
+        values,
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        ownerId: row.owner_id,
+        kind: row.kind,
+        courseId: row.course_id,
+        input: row.input,
+        result: row.result,
+        createdAt: timestamp(row.created_at),
+      }));
     },
   };
 }

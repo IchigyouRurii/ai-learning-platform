@@ -9,10 +9,12 @@ export function ActivityForm({
   courseId,
   activity,
   latest,
+  history = [],
 }: {
   courseId: string;
   activity: Activity;
   latest?: Submission;
+  history?: Submission[];
 }) {
   const [answer, setAnswer] = useState(latest?.answer ?? "");
   const [feedback, setFeedback] = useState(latest?.aiFeedback ?? "");
@@ -109,6 +111,22 @@ export function ActivityForm({
           </div>
           <p className="prose-text">{feedback}</p>
         </div>
+      )}
+      {history.length > 0 && (
+        <details className="attempt-history">
+          <summary>AI feedback history ({history.length})</summary>
+          {history.map((item) => (
+            <article key={item.id}>
+              <small>
+                {new Date(item.createdAt).toLocaleString("en-US", {
+                  timeZone: "Asia/Shanghai",
+                })}
+              </small>
+              <p className="prose-text">{item.answer}</p>
+              <p className="muted">{item.aiFeedback}</p>
+            </article>
+          ))}
+        </details>
       )}
     </section>
   );

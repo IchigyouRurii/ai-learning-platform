@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  History,
   Plus,
   Save,
   Sparkles,
@@ -15,6 +16,7 @@ import type {
   Activity,
   ContentBlock,
   CourseDraft,
+  GenerationRecord,
   Lesson,
   QuizQuestion,
 } from "@/shared/contracts";
@@ -29,13 +31,19 @@ function newId(prefix: string) {
 }
 
 function RewriteBox({
+  courseId,
   courseTitle,
+  lessonId,
   lessonTitle,
+  blockId,
   body,
   onApply,
 }: {
+  courseId: string;
   courseTitle: string;
+  lessonId: string;
   lessonTitle: string;
+  blockId: string;
   body: string;
   onApply: (text: string) => void;
 }) {
@@ -59,6 +67,9 @@ function RewriteBox({
             setError("");
             startTransition(async () => {
               const result = await rewriteTextAction({
+                courseId,
+                lessonId,
+                blockId,
                 courseTitle,
                 lessonTitle,
                 body,
@@ -167,14 +178,20 @@ function QuestionEditor({
 }
 
 function ActivityEditor({
-  activity,
+  courseId,
   courseTitle,
+  lessonId,
   lessonTitle,
+  blockId,
+  activity,
   onChange,
 }: {
-  activity: Activity;
+  courseId: string;
   courseTitle: string;
+  lessonId: string;
   lessonTitle: string;
+  blockId: string;
+  activity: Activity;
   onChange: (activity: Activity) => void;
 }) {
   const update = (patch: Partial<Activity>) =>
@@ -209,8 +226,11 @@ function ActivityEditor({
       </label>
       {activity.type !== "quiz" && (
         <RewriteBox
+          courseId={courseId}
           courseTitle={courseTitle}
+          lessonId={lessonId}
           lessonTitle={lessonTitle}
+          blockId={blockId}
           body={`${activity.prompt}\n\n${activity.rubric}`}
           onApply={(text) => update({ prompt: text })}
         />
@@ -274,18 +294,39 @@ function ActivityEditor({
   );
 }
 
+function rewriteRecordView(record: GenerationRecord) {
+  const input =
+    record.input && typeof record.input === "object"
+      ? (record.input as Record<string, unknown>)
+      : {};
+  const result =
+    record.result && typeof record.result === "object"
+      ? (record.result as Record<string, unknown>)
+      : {};
+  return {
+    blockId: typeof input.blockId === "string" ? input.blockId : null,
+    instruction:
+      typeof input.instruction === "string" ? input.instruction : "Rewrite",
+    lessonTitle:
+      typeof input.lessonTitle === "string" ? input.lessonTitle : "Lesson",
+    text: typeof result.text === "string" ? result.text : null,
+  };
+}
+
 export function CourseEditor({
   courseId,
   initialContent,
   initialDraftRevision,
   publishedVersion,
   mode,
+  rewriteHistory = [],
 }: {
   courseId: string;
   initialContent: CourseDraft;
   initialDraftRevision: number;
   publishedVersion: number | null;
   mode: "teacher" | "student";
+  rewriteHistory?: GenerationRecord[];
 }) {
   const [content, setContent] = useState<CourseDraft>(initialContent);
   const [revision, setRevision] = useState(initialDraftRevision);
@@ -372,6 +413,27 @@ export function CourseEditor({
       };
     }
     updateBlock(lessonIndex, blockIndex, { ...block, activity });
+  }
+
+  function applyRewrite(record: GenerationRecord) {
+    const view = rewriteRecordView(record);
+    if (!view.blockId || view.text === null) return;
+    update((course) => ({
+      ...course,
+      lessons: course.lessons.map((lesson) => ({
+        ...lesson,
+        blocks: lesson.blocks.map((block) => {
+          if (block.id !== view.blockId) return block;
+          if (block.type === "text") return { ...block, body: view.text! };
+          if (block.type === "activity")
+            return {
+              ...block,
+              activity: { ...block.activity, prompt: view.text! },
+            };
+          return block;
+        }),
+      })),
+    }));
   }
 
   function persist(): Promise<number | null> {
@@ -541,8 +603,11 @@ export function CourseEditor({
                     />
                   </label>
                   <RewriteBox
+                    courseId={courseId}
                     courseTitle={content.title}
+                    lessonId={lesson.id}
                     lessonTitle={lesson.title}
+                    blockId={block.id}
                     body={block.body}
                     onApply={(text) =>
                       updateBlock(lessonIndex, blockIndex, { ...block, body: text })
@@ -551,9 +616,12 @@ export function CourseEditor({
                 </>
               ) : block.type === "activity" ? (
                 <ActivityEditor
-                  activity={block.activity}
+                  courseId={courseId}
                   courseTitle={content.title}
+                  lessonId={lesson.id}
                   lessonTitle={lesson.title}
+                  blockId={block.id}
+                  activity={block.activity}
                   onChange={(activity) =>
                     updateBlock(lessonIndex, blockIndex, { ...block, activity })
                   }
@@ -689,6 +757,54 @@ export function CourseEditor({
         Published versions are immutable. Saving changes creates a new draft
         revision; publishing adds a new snapshot.
       </p>
+      {rewriteHistory.length > 0 && (
+        <section className="panel history-panel">
+          <div className="section-heading">
+            <div>
+              <h2>
+                <History size={18} />
+                AI rewrite history
+              </h2>
+              <p className="muted">
+                Every rewrite request is saved. Apply an older result to the
+                matching block.
+              </p>
+            </div>
+          </div>
+          <ul className="history-list">
+            {rewriteHistory.map((record) => {
+              const view = rewriteRecordView(record);
+              return (
+                <li key={record.id}>
+                  <div>
+                    <strong>{view.instruction}</strong>
+                    <small>
+                      {view.lessonTitle} ·{" "}
+                      {new Date(record.createdAt).toLocaleString("en-US", {
+                        timeZone: "Asia/Shanghai",
+                      })}
+                    </small>
+                    {view.text && (
+                      <p className="muted">
+                        {view.text.slice(0, 180)}
+                        {view.text.length > 180 ? "…" : ""}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    disabled={!view.blockId || view.text === null}
+                    onClick={() => applyRewrite(record)}
+                  >
+                    Apply
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       {message && (
         <p className="success-text" role="status">
           {message}

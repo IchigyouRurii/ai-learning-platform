@@ -10,6 +10,7 @@ import {
 import {
   getCurrentUser,
   getWorkspace,
+  recordGeneration,
   saveLearningPath,
 } from "@/modules/platform";
 import type {
@@ -50,7 +51,13 @@ export async function generatePathAction(
           course.status === "published" && course.visibility === "cohort",
       )
       .map(catalogItem);
-    return { ok: true, data: await generateLearningPath(profile, catalog) };
+    const generated = await generateLearningPath(profile, catalog);
+    await recordGeneration(actor, {
+      kind: "path",
+      input: profile,
+      result: generated,
+    });
+    return { ok: true, data: generated };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }

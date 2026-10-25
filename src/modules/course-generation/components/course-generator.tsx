@@ -2,14 +2,23 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, FileText, Save, Sparkles } from "lucide-react";
-import type {
-  CourseDraft,
-  GenerationInput,
+import { Check, FileText, History, RotateCcw, Save, Sparkles } from "lucide-react";
+import {
+  courseDraftSchema,
+  generationInputSchema,
+  type CourseDraft,
+  type GenerationInput,
+  type GenerationRecord,
 } from "@/shared/contracts";
 import { generateCourseAction, saveCourseAction } from "../server/actions";
 
-export function CourseGenerator({ mode }: { mode: "teacher" | "student" }) {
+export function CourseGenerator({
+  mode,
+  history = [],
+}: {
+  mode: "teacher" | "student";
+  history?: GenerationRecord[];
+}) {
   const [input, setInput] = useState<GenerationInput>({
     topic: "",
     audience:
@@ -29,8 +38,19 @@ export function CourseGenerator({ mode }: { mode: "teacher" | "student" }) {
     value: GenerationInput[K],
   ) => setInput((previous) => ({ ...previous, [key]: value }));
 
+  const historyItems = history.map((record) => {
+    const course = courseDraftSchema.safeParse(record.result);
+    const savedInput = generationInputSchema.safeParse(record.input);
+    return {
+      record,
+      course: course.success ? course.data : null,
+      topic: savedInput.success ? savedInput.data.topic : "Untitled course",
+    };
+  });
+
   return (
-    <div className="builder-grid">
+    <>
+      <div className="builder-grid">
       <section className="panel builder-input">
         <div className="panel-heading">
           <span className="step-number">01</span>
@@ -51,8 +71,10 @@ export function CourseGenerator({ mode }: { mode: "teacher" | "student" }) {
             setError("");
             startTransition(async () => {
               const result = await generateCourseAction(input);
-              if (result.ok) setDraft(result.data);
-              else setError(result.error);
+              if (result.ok) {
+                setDraft(result.data);
+                router.refresh();
+              } else setError(result.error);
             });
           }}
         >
@@ -240,6 +262,49 @@ export function CourseGenerator({ mode }: { mode: "teacher" | "student" }) {
           </p>
         )}
       </section>
-    </div>
+      </div>
+      {historyItems.length > 0 && (
+        <section className="panel history-panel">
+          <div className="section-heading">
+            <div>
+              <h2>
+                <History size={18} />
+                Recent generations
+              </h2>
+              <p className="muted">
+                Every AI generation is saved. Restore one to keep editing it.
+              </p>
+            </div>
+          </div>
+          <ul className="history-list">
+            {historyItems.map(({ record, course, topic }) => (
+              <li key={record.id}>
+                <div>
+                  <strong>{topic}</strong>
+                  <small>
+                    {new Date(record.createdAt).toLocaleString("en-US", {
+                      timeZone: "Asia/Shanghai",
+                    })}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={!course}
+                  onClick={() => {
+                    if (!course) return;
+                    setDraft(course);
+                    setError("");
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </>
   );
 }

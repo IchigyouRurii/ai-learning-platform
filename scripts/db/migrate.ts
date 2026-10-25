@@ -20,14 +20,31 @@ await runDatabaseTask(async (pool) => {
       .filter((name) => name.endsWith(".sql"))
       .sort()) {
       const source = await readFile(join(directory, name), "utf8");
-      const checksum = createHash("sha256").update(source).digest("hex");
+      // Hash the LF-normalized content so Windows (CRLF) and POSIX checkouts
+      // agree on whether an applied migration has really changed.
+      const normalized = source.replace(/\r\n/g, "\n");
+      const checksum = createHash("sha256").update(normalized).digest("hex");
+      const rawChecksum = createHash("sha256").update(source).digest("hex");
       const previous = await client.query(
         "select checksum from minicourse_migrations where name = $1",
         [name],
       );
       if (previous.rows[0]) {
-        if (previous.rows[0].checksum !== checksum)
-          throw new Error("已应用的迁移发生变化，请新增迁移文件。");
+        if (previous.rows[0].checksum !== checksum) {
+          if (previous.rows[0].checksum === rawChecksum) {
+            // The migration was applied from a CRLF checkout. Store the
+            // normalized checksum without re-running the SQL.
+            await client.query(
+              "update minicourse_migrations set checksum = $1 where name = $2",
+              [checksum, name],
+            );
+            console.log(`已统一 ${name} 的换行校验和。`);
+            continue;
+          }
+          throw new Error(
+            `已应用的迁移发生变化：${name}。请新增迁移文件，不要修改历史迁移。`,
+          );
+        }
         continue;
       }
       await client.query("begin");

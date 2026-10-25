@@ -4,6 +4,8 @@ import {
   type Course,
   type CourseDocument,
   type CourseDraft,
+  type GenerationKind,
+  type GenerationRecord,
   type LearningPathRecord,
 } from "@/shared/contracts";
 
@@ -245,21 +247,46 @@ export function createLocalPlatformRepository(
       });
     },
     async getLearningPath(ownerId) {
-      return (
-        (await store.read()).learningPaths?.find(
-          (item) => item.ownerId === ownerId,
-        ) ?? null
-      );
+      const paths = ((await store.read()).learningPaths ?? [])
+        .filter((item) => item.ownerId === ownerId)
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return paths[0] ?? null;
+    },
+    async listLearningPaths(ownerId) {
+      return ((await store.read()).learningPaths ?? [])
+        .filter((item) => item.ownerId === ownerId)
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
     async saveLearningPath(path: LearningPathRecord) {
       return store.mutate((state) => {
         state.learningPaths ??= [];
-        state.learningPaths = state.learningPaths.filter(
-          (item) => item.ownerId !== path.ownerId,
-        );
         state.learningPaths.unshift(path);
         return path;
       });
+    },
+    async insertGenerationRecord(record: GenerationRecord) {
+      return store.mutate((state) => {
+        state.generationRecords ??= [];
+        state.generationRecords.unshift(record);
+        return record;
+      });
+    },
+    async listGenerationRecords(
+      ownerId,
+      options: { kind?: GenerationKind; courseId?: string; limit?: number } = {},
+    ) {
+      return ((await store.read()).generationRecords ?? [])
+        .filter(
+          (item) =>
+            item.ownerId === ownerId &&
+            (!options.kind || item.kind === options.kind) &&
+            (!options.courseId || item.courseId === options.courseId),
+        )
+        .slice()
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, options.limit ?? 20);
     },
   };
 }

@@ -1329,3 +1329,66 @@ summary {
     grid-template-columns: 1fr;
   }
 }
+.history-panel {
+  margin-top: 20px;
+}
+.history-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.history-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.history-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #fff;
+}
+.history-list li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.history-list small {
+  color: var(--ui-secondary);
+  font-size: 12px;
+}
+.history-list .button {
+  flex: none;
+}
+@media (max-width: 600px) {
+  .history-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+.attempt-history {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+.attempt-history summary {
+  cursor: pointer;
+  color: var(--ui-link);
+  font-size: 13px;
+}
+.attempt-history article {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--ui-border);
+}
+.attempt-history small {
+  color: var(--ui-secondary);
+  font-size: 12px;
+}

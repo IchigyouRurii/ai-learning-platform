@@ -1,11 +1,18 @@
-import { getCurrentUser } from "@/modules/platform";
+import {
+  getCurrentUser,
+  listGenerationRecords,
+} from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { PageHeading } from "@/shared/ui/primitives";
 import { CourseGenerator } from "@/modules/course-generation/components/course-generator";
 
 export default async function NewCoursePage() {
-  if ((await getCurrentUser()).role !== "teacher")
-    return <RoleGate expected="teacher" />;
+  const user = await getCurrentUser();
+  if (user.role !== "teacher") return <RoleGate expected="teacher" />;
+  const history = await listGenerationRecords(user, {
+    kind: "course",
+    limit: 10,
+  });
   return (
     <>
       <PageHeading
@@ -13,7 +20,7 @@ export default async function NewCoursePage() {
         title="Create a course"
         description="Generate a draft from your goals and materials, then edit and publish it."
       />
-      <CourseGenerator mode="teacher" />
+      <CourseGenerator mode="teacher" history={history} />
     </>
   );
 }

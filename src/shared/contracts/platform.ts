@@ -53,6 +53,17 @@ export type LearningPathRecord = {
   createdAt: string;
   updatedAt: string;
 };
+export type GenerationKind = "course" | "rewrite" | "path";
+/** One persisted AI interaction: generation, rewrite or path plan. */
+export type GenerationRecord = {
+  id: string;
+  ownerId: string;
+  kind: GenerationKind;
+  courseId: string | null;
+  input: unknown;
+  result: unknown;
+  createdAt: string;
+};
 export type DemoState = {
   schemaVersion: 1;
   courses: Course[];
@@ -60,6 +71,7 @@ export type DemoState = {
   submissions: Submission[];
   feedback: TeacherFeedback[];
   learningPaths?: LearningPathRecord[];
+  generationRecords?: GenerationRecord[];
 };
 export type Workspace = DemoState & { members: User[] };
 export type ActionResult<T> =
