@@ -7,6 +7,8 @@ import {
   GraduationCap,
   FileText,
   LayoutGrid,
+  Route,
+  Sparkles,
   Users,
 } from "lucide-react";
 import type { Role } from "@/shared/contracts";
@@ -35,6 +37,16 @@ export function Navigation({ role }: { role: Role }) {
               href: "/student",
               label: "Course Marketplace",
               icon: GraduationCap,
+            },
+            {
+              href: "/student/studio",
+              label: "AI Studio",
+              icon: Sparkles,
+            },
+            {
+              href: "/student/path",
+              label: "Learning Path",
+              icon: Route,
             },
             {
               href: "/student/progress",

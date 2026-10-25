@@ -53,12 +53,16 @@ describe("platform permissions and learning lifecycle", () => {
       ),
     ).toBe(true);
   });
-  it("prevents students from creating or publishing teacher courses", async () => {
-    await expect(createCourse(student, state.courses[0])).rejects.toThrow(
-      "teacher",
-    );
+  it("lets students create personal courses but not edit classroom courses", async () => {
+    const personal = await createCourse(student, state.courses[0]);
+    expect(personal.visibility).toBe("personal");
+    expect(personal.status).toBe("published");
+    expect(personal.ownerId).toBe(student.id);
+    await expect(
+      createCourse(student, state.courses[0], { visibility: "cohort" }),
+    ).rejects.toThrow("personal");
     await expect(publishCourse(student, "ai-coding")).rejects.toThrow(
-      "teacher",
+      "permission",
     );
   });
   it("prevents one teacher from publishing another teacher's course", async () => {
@@ -71,11 +75,11 @@ describe("platform permissions and learning lifecycle", () => {
       getLearningContext(
         student,
         "product-skills",
-        "product-skills-activity-1",
+        "product-skills-r1",
       ),
     ).rejects.toThrow("enroll");
     await expect(
-      getLearningContext(student, "ai-coding", "product-skills-activity-1"),
+      getLearningContext(student, "ai-coding", "product-skills-r1"),
     ).rejects.toThrow("does not belong");
   });
   it("joining twice does not duplicate the course membership", async () => {
@@ -91,7 +95,7 @@ describe("platform permissions and learning lifecycle", () => {
     const input = {
       courseId: "ai-coding",
       courseVersion: 1,
-      activityId: "ai-coding-activity-1",
+      activityId: "ai-coding-r1",
       answer: "A concrete response",
       aiFeedback: "Try another example",
     };
@@ -102,7 +106,7 @@ describe("platform permissions and learning lifecycle", () => {
       state.submissions,
       student.id,
     );
-    expect(progress).toEqual({ done: 1, total: 1, percent: 100 });
+    expect(progress).toEqual({ done: 1, total: 2, percent: 50 });
     expect(
       calculateProgress(
         { ...state.courses[0], version: 2 },
@@ -119,7 +123,7 @@ describe("platform permissions and learning lifecycle", () => {
     const input = {
       courseId: "ai-coding",
       courseVersion: 2,
-      activityId: "ai-coding-activity-1",
+      activityId: "ai-coding-r1",
       answer: "A concrete response",
       aiFeedback: "Feedback",
     };

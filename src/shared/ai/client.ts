@@ -122,6 +122,7 @@ function serviceError(status: number): Error {
 export async function complete(
   messages: Message[],
   json = false,
+  options: { maxTokens?: number; temperature?: number } = {},
 ): Promise<string> {
   const { provider, key, model, jsonMode, url } = configuration();
   // OpenRouter's free models have different structured-output capabilities.
@@ -139,7 +140,10 @@ export async function complete(
       body: JSON.stringify({
         model,
         messages,
-        max_tokens: json ? 5000 : 1000,
+        max_tokens: options.maxTokens ?? (json ? 6000 : 1000),
+        ...(options.temperature === undefined
+          ? {}
+          : { temperature: options.temperature }),
         ...(structured
           ? {
               response_format: { type: "json_object" },

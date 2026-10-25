@@ -15,6 +15,9 @@ export async function StudentProgress() {
   const courses = workspace.courses.filter((course) =>
     workspace.enrollments.some((item) => item.courseId === course.id),
   );
+  const submissions = workspace.submissions
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <>
       <PageHeading
@@ -85,6 +88,50 @@ export async function StudentProgress() {
               </small>
             </article>
           ))
+        )}
+      </section>
+      <section className="panel feedback-section">
+        <div className="section-heading">
+          <h2>
+            <MessageSquareText size={20} />
+            Answer and AI feedback history
+          </h2>
+        </div>
+        {!submissions.length ? (
+          <p className="muted">
+            Your quiz and reflection attempts will appear here with the AI
+            feedback for each attempt.
+          </p>
+        ) : (
+          submissions.map((submission) => {
+            const course = workspace.courses.find(
+              (item) => item.id === submission.courseId,
+            );
+            const activity = course?.lessons
+              .flatMap((lesson) => lesson.blocks)
+              .find(
+                (block) =>
+                  block.type === "activity" &&
+                  block.activity.id === submission.activityId,
+              );
+            return (
+              <article className="feedback-note" key={submission.id}>
+                <strong>
+                  {course?.title ?? "Course"} ·{" "}
+                  {activity?.type === "activity"
+                    ? activity.activity.title
+                    : submission.activityId}
+                </strong>
+                <small>
+                  Version {submission.courseVersion} ·{" "}
+                  {new Date(submission.createdAt).toLocaleString("en-US", {
+                    timeZone: "Asia/Shanghai",
+                  })}
+                </small>
+                <p className="prose-text muted">{submission.aiFeedback}</p>
+              </article>
+            );
+          })
         )}
       </section>
     </>

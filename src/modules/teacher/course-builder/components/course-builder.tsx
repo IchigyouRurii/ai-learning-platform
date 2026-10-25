@@ -11,6 +11,7 @@ export function CourseBuilder() {
     topic: "",
     audience: "University students with no programming experience",
     goals: "",
+    difficulty: "beginner",
     materials: "",
   });
   const [draft, setDraft] = useState<CourseDraft | null>(null);

@@ -1,19 +1,86 @@
 import { z } from "zod";
 
-export const activitySchema = z.object({
-  id: z.string().min(1),
-  type: z.enum([
-    "reflection",
-    "quiz",
-    "roleplay",
-    "coding",
-    "simulation",
-    "game",
-  ]),
-  title: z.string().min(1).max(160),
-  prompt: z.string().min(1).max(6000),
-  rubric: z.string().min(1).max(3000),
+export const quizOptionSchema = z.object({
+  id: z.string().min(1).max(80),
+  text: z.string().min(1).max(500),
 });
+
+export const quizQuestionSchema = z.object({
+  id: z.string().min(1).max(80),
+  prompt: z.string().min(1).max(2000),
+  multiple: z.boolean().default(false),
+  options: z.array(quizOptionSchema).min(2).max(8),
+  // Authoring-only data. Never send this field to learner pages.
+  correctOptionIds: z.array(z.string().min(1)).min(1).max(8),
+  explanation: z.string().min(1).max(2000),
+});
+
+export const activitySchema = z
+  .object({
+    id: z.string().min(1),
+    type: z.enum([
+      "reflection",
+      "quiz",
+      "roleplay",
+      "coding",
+      "simulation",
+      "game",
+    ]),
+    title: z.string().min(1).max(160),
+    prompt: z.string().min(1).max(6000),
+    rubric: z.string().min(1).max(3000),
+    questions: z.array(quizQuestionSchema).min(1).max(30).optional(),
+  })
+  .superRefine((activity, context) => {
+    if (activity.type !== "quiz") {
+      if (activity.questions)
+        context.addIssue({
+          code: "custom",
+          message: "Only quiz activities may contain questions",
+        });
+      return;
+    }
+    if (!activity.questions?.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Quiz activities require at least one question",
+      });
+      return;
+    }
+    const questionIds = new Set<string>();
+    for (const question of activity.questions) {
+      if (questionIds.has(question.id))
+        context.addIssue({
+          code: "custom",
+          message: "Question IDs must be unique within an activity",
+        });
+      questionIds.add(question.id);
+      const optionIds = new Set(question.options.map((option) => option.id));
+      if (optionIds.size !== question.options.length)
+        context.addIssue({
+          code: "custom",
+          message: "Option IDs must be unique within a question",
+        });
+      if (
+        new Set(question.correctOptionIds).size !==
+        question.correctOptionIds.length
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Correct option IDs must be unique",
+        });
+      if (question.correctOptionIds.some((id) => !optionIds.has(id)))
+        context.addIssue({
+          code: "custom",
+          message: "Correct option IDs must reference the question options",
+        });
+      if (!question.multiple && question.correctOptionIds.length !== 1)
+        context.addIssue({
+          code: "custom",
+          message: "Single-choice questions require exactly one answer",
+        });
+    }
+  });
 
 export const contentBlockSchema = z.discriminatedUnion("type", [
   z.object({
@@ -64,6 +131,7 @@ export const courseDraftSchema = z
   .superRefine((course, context) => {
     const lessonIds = new Set<string>();
     const activityIds = new Set<string>();
+    const questionIds = new Set<string>();
     for (const lesson of course.lessons) {
       if (lessonIds.has(lesson.id))
         context.addIssue({
@@ -72,13 +140,20 @@ export const courseDraftSchema = z
         });
       lessonIds.add(lesson.id);
       for (const block of lesson.blocks) {
-        if (block.type === "activity") {
-          if (activityIds.has(block.activity.id))
+        if (block.type !== "activity") continue;
+        if (activityIds.has(block.activity.id))
+          context.addIssue({
+            code: "custom",
+            message: "Activity IDs must be unique",
+          });
+        activityIds.add(block.activity.id);
+        for (const question of block.activity.questions ?? []) {
+          if (questionIds.has(question.id))
             context.addIssue({
               code: "custom",
-              message: "Activity IDs must be unique",
+              message: "Question IDs must be unique",
             });
-          activityIds.add(block.activity.id);
+          questionIds.add(question.id);
         }
       }
     }
@@ -92,9 +167,14 @@ export const generationInputSchema = z.object({
     .max(200),
   audience: z.string().trim().min(2).max(500),
   goals: z.string().trim().min(2).max(2000),
+  difficulty: z
+    .enum(["beginner", "intermediate", "advanced"])
+    .default("beginner"),
   materials: z.string().trim().max(20000).default(""),
 });
 
+export type QuizOption = z.infer<typeof quizOptionSchema>;
+export type QuizQuestion = z.infer<typeof quizQuestionSchema>;
 export type Activity = z.infer<typeof activitySchema>;
 export type ContentBlock = z.infer<typeof contentBlockSchema>;
 export type Lesson = z.infer<typeof lessonSchema>;
@@ -109,7 +189,80 @@ export type Course = CourseDraft & {
   version: number;
   createdAt: string;
   updatedAt: string;
+  /** Local demo only: draft revision counter used for optimistic locking. */
+  draftRevision?: number;
+  /** Local demo only: immutable published snapshot while the draft changes. */
+  publishedContent?: CourseDraft;
 };
+
+// Learner-facing copies never contain answer keys or private explanations.
+export type LearnerQuizQuestion = Omit<
+  QuizQuestion,
+  "correctOptionIds" | "explanation"
+>;
+export type SafeActivity = Omit<Activity, "questions"> & {
+  questions?: LearnerQuizQuestion[];
+};
+export type LearnerContentBlock =
+  | Extract<ContentBlock, { type: "text" | "image" | "video" | "slides" }>
+  | { type: "activity"; id: string; activity: SafeActivity };
+export type LearnerLesson = {
+  id: string;
+  title: string;
+  blocks: LearnerContentBlock[];
+};
+export type SafeCourse = Omit<CourseDraft, "lessons"> & {
+  lessons: LearnerLesson[];
+};
+export type QuizAnswer = {
+  questionId: string;
+  selectedOptionIds: string[];
+};
+export type QuizQuestionResult = {
+  questionId: string;
+  correct: boolean;
+  correctOptionIds: string[];
+  correctAnswerText: string;
+  explanation: string;
+};
+export type QuizResult = {
+  score: number;
+  maxScore: number;
+  feedback: string;
+  results: QuizQuestionResult[];
+};
+
+export function toSafeActivity(activity: Activity): SafeActivity {
+  const { questions, ...rest } = activity;
+  if (!questions) return rest;
+  return {
+    ...rest,
+    questions: questions.map((question) => ({
+      id: question.id,
+      prompt: question.prompt,
+      multiple: question.multiple,
+      options: question.options,
+    })),
+  };
+}
+
+export function toSafeCourse(course: CourseDraft): SafeCourse {
+  return {
+    ...course,
+    lessons: course.lessons.map((lesson) => ({
+      ...lesson,
+      blocks: lesson.blocks.map((block): LearnerContentBlock =>
+        block.type === "activity"
+          ? {
+              id: block.id,
+              type: "activity",
+              activity: toSafeActivity(block.activity),
+            }
+          : block,
+      ),
+    })),
+  };
+}
 
 export function getActivities(course: CourseDraft): Activity[] {
   return course.lessons.flatMap((lesson) =>

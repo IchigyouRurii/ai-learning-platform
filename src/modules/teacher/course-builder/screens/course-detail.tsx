@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { getCurrentUser, getWorkspace } from "@/modules/platform";
+import { ArrowLeft, Pencil } from "lucide-react";
+import {
+  getCourseDocumentForAuthor,
+  getCurrentUser,
+} from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { Badge, PageHeading } from "@/shared/ui/primitives";
 import { PublishButton } from "../components/publish-button";
@@ -9,9 +12,11 @@ import { PublishButton } from "../components/publish-button";
 export async function TeacherCourseDetail({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (user.role !== "teacher") return <RoleGate expected="teacher" />;
-  const workspace = await getWorkspace(user);
-  const course = workspace.courses.find((item) => item.id === id);
-  if (!course) notFound();
+  const document = await getCourseDocumentForAuthor(user, id).catch(
+    () => null,
+  );
+  if (!document) notFound();
+  const course = document.content;
   return (
     <>
       <Link href="/teacher/creations" className="back-link">
@@ -23,9 +28,20 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
         title={course.title}
         description={course.description}
         action={
-          <Badge tone={course.status === "published" ? "green" : "amber"}>
-            {course.status === "published" ? "Published" : "Unpublished draft"}
-          </Badge>
+          <div className="heading-actions">
+            <Badge tone={document.publishedVersion ? "green" : "amber"}>
+              {document.publishedVersion
+                ? `Published v${document.publishedVersion}`
+                : "Unpublished draft"}
+            </Badge>
+            <Link
+              href={`/teacher/courses/${id}/edit`}
+              className="button secondary"
+            >
+              <Pencil size={15} />
+              Edit course
+            </Link>
+          </div>
         }
       />
       <div className="detail-grid">
@@ -43,13 +59,48 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
                   </p>
                 ) : block.type === "activity" ? (
                   <div className="activity-preview" key={block.id}>
-                    <Badge>Activities</Badge>
+                    <Badge>
+                      {block.activity.type === "quiz" ? "Quiz" : "Activity"}
+                    </Badge>
                     <h3>{block.activity.title}</h3>
                     <p>{block.activity.prompt}</p>
                     <details>
                       <summary>View assessment criteria</summary>
                       <p className="muted">{block.activity.rubric}</p>
                     </details>
+                    {block.activity.type === "quiz" && (
+                      <ol className="author-quiz">
+                        {block.activity.questions?.map((question) => (
+                          <li key={question.id}>
+                            <strong>{question.prompt}</strong>
+                            <ul>
+                              {question.options.map((option) => (
+                                <li
+                                  key={option.id}
+                                  className={
+                                    question.correctOptionIds.includes(
+                                      option.id,
+                                    )
+                                      ? "correct-option"
+                                      : undefined
+                                  }
+                                >
+                                  {option.text}
+                                  {question.correctOptionIds.includes(
+                                    option.id,
+                                  )
+                                    ? " ✓"
+                                    : ""}
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="muted">
+                              Explanation: {question.explanation}
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 ) : (
                   <p className="muted" key={block.id}>
@@ -72,18 +123,24 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
           <h3>Target audience</h3>
           <p className="muted">{course.audience}</p>
           <hr />
-          {course.status === "draft" ? (
+          <p className="form-hint">
+            Draft revision {document.draftRevision}
+            {document.publishedVersion
+              ? ` · Published version ${document.publishedVersion}`
+              : ""}
+          </p>
+          {!document.publishedVersion ? (
             <>
               <p className="form-hint">
                 Check content accuracy and activity suitability before
                 publishing.
               </p>
-              <PublishButton courseId={course.id} />
+              <PublishButton courseId={id} />
             </>
           ) : (
             <p className="muted">
-              This course is available to students. Demo users can switch roles
-              in the header.
+              This course is available to students. Edit the draft and publish a
+              new version when you are ready.
             </p>
           )}
         </aside>

@@ -106,14 +106,15 @@ describe("OpenRouter transport and course integration", () => {
       topic: "需求描述",
       audience: "初学者",
       goals: "写出清晰的需求",
+      difficulty: "beginner",
       materials: "",
     });
     expect(result.title).toBe(course.title);
     expect(() => parseGeneratedCourse('{"title":"incomplete"}')).toThrow(
-      "missing or invalid fields",
+      "invalid structure",
     );
     expect(() =>
       parseGeneratedCourse('课程如下：{"title":"incomplete"}'),
-    ).toThrow("valid JSON");
+    ).toThrow("invalid structure");
   });
 });

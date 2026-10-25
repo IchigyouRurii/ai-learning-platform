@@ -8,9 +8,51 @@ import {
   getLearningContext,
   recordSubmission,
 } from "@/modules/platform";
-import type { ActionResult } from "@/shared/contracts";
+import type { ActionResult, QuizResult } from "@/shared/contracts";
 import { actionError } from "@/shared/contracts/errors";
 import { evaluateAnswer } from "./feedback";
+import { gradeQuiz } from "./quiz";
+
+const quizAnswerSchema = z.object({
+  courseId: z.string().min(1),
+  activityId: z.string().min(1),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string().min(1),
+        selectedOptionIds: z.array(z.string().min(1)).min(1).max(8),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+
+export async function submitQuizAction(
+  raw: z.infer<typeof quizAnswerSchema>,
+): Promise<ActionResult<QuizResult>> {
+  try {
+    const input = quizAnswerSchema.parse(raw);
+    const actor = await getCurrentUser();
+    const { course, activity } = await getLearningContext(
+      actor,
+      input.courseId,
+      input.activityId,
+    );
+    const result = gradeQuiz(activity, input.answers);
+    await recordSubmission(actor, {
+      courseId: course.id,
+      courseVersion: course.version,
+      activityId: activity.id,
+      answer: JSON.stringify(input.answers),
+      aiFeedback: result.feedback,
+    });
+    revalidatePath("/student");
+    revalidatePath("/teacher");
+    return { ok: true, data: result };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
 
 const answerSchema = z.object({
   courseId: z.string().min(1),

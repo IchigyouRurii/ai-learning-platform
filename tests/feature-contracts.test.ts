@@ -14,6 +14,20 @@ import {
 } from "@/shared/contracts/features";
 import { createSeedState } from "@/shared/database/seed";
 
+// The reserved authoring contract requires separate evaluation data for every
+// non-reflection activity. This fixture keeps only legacy reflection activities
+// so the authoring tests can construct their own quiz explicitly.
+function legacyCourse() {
+  const course = structuredClone(createSeedState().courses[0]);
+  course.lessons = course.lessons.map((lesson) => ({
+    ...lesson,
+    blocks: lesson.blocks.filter(
+      (block) => block.type !== "activity" || block.activity.type === "reflection",
+    ),
+  }));
+  return course;
+}
+
 const quiz = {
   learner: {
     id: "quiz-1",
@@ -118,7 +132,7 @@ describe("complete feature data contracts", () => {
     expect(JSON.stringify(view)).not.toContain("privateInstructions");
   });
   it("requires advanced activity configuration to match the embedded activity and type", () => {
-    const course = structuredClone(createSeedState().courses[0]);
+    const course = legacyCourse();
     const block = course.lessons[0].blocks.find((b) => b.type === "activity")!;
     if (block.type !== "activity") throw new Error("fixture");
     block.activity = {
@@ -127,6 +141,13 @@ describe("complete feature data contracts", () => {
       title: "测验",
       prompt: "请选择",
       rubric: "按答案判分",
+      // Inline questions keep the course-content schema valid; the reserved
+      // authoring contract stores the evaluation separately in `activities`.
+      questions: quiz.learner.questions.map((question) => ({
+        ...question,
+        correctOptionIds: ["b"],
+        explanation: "描述可观察的结果",
+      })),
     };
     expect(
       authoringDraftSchema.safeParse({ course, activities: [quiz] }).success,
@@ -147,12 +168,12 @@ describe("complete feature data contracts", () => {
   });
   it("preserves legacy reflection courses while rejecting forged authority and scores", () => {
     expect(
-      authoringDraftSchema.safeParse({ course: createSeedState().courses[0] })
+      authoringDraftSchema.safeParse({ course: legacyCourse() })
         .success,
     ).toBe(true);
     expect(
       courseManagementFeatures.createPersonal.input.safeParse({
-        content: { course: createSeedState().courses[0] },
+        content: { course: legacyCourse() },
         ownerId: "other",
       }).success,
     ).toBe(false);
@@ -167,7 +188,7 @@ describe("complete feature data contracts", () => {
       courseManagementFeatures.updateDraft.input.safeParse({
         courseId: "course",
         expectedDraftRevision: 0,
-        content: { course: createSeedState().courses[0] },
+        content: { course: legacyCourse() },
       }).success,
     ).toBe(false);
   });

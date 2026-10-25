@@ -12,6 +12,53 @@ import {
   ProgressBar,
 } from "@/shared/ui/primitives";
 import { FeedbackForm } from "../components/feedback-form";
+import type { Course } from "@/shared/contracts";
+
+function activityTitle(course: Course, activityId: string) {
+  const block = course.lessons
+    .flatMap((lesson) => lesson.blocks)
+    .find(
+      (item) => item.type === "activity" && item.activity.id === activityId,
+    );
+  return block?.type === "activity" ? block.activity.title : activityId;
+}
+
+function readableAnswer(course: Course, activityId: string, answer: string) {
+  try {
+    const parsed = JSON.parse(answer) as unknown;
+    if (!Array.isArray(parsed)) return answer;
+    const activity = course.lessons
+      .flatMap((lesson) => lesson.blocks)
+      .find(
+        (block) =>
+          block.type === "activity" && block.activity.id === activityId,
+      );
+    if (!activity || activity.type !== "activity") return answer;
+    const questions = activity.activity.questions;
+    if (!questions?.length) return answer;
+    return parsed
+      .map((item, index) => {
+        const entry = item as {
+          questionId?: string;
+          selectedOptionIds?: string[];
+        };
+        const question = questions.find(
+          (candidate) => candidate.id === entry.questionId,
+        );
+        if (!question) return `Q${index + 1}: ${JSON.stringify(item)}`;
+        const selected = (entry.selectedOptionIds ?? [])
+          .map(
+            (id) =>
+              question.options.find((option) => option.id === id)?.text ?? id,
+          )
+          .join(", ");
+        return `Q${index + 1}: ${selected || "(no answer)"}`;
+      })
+      .join("\n");
+  } catch {
+    return answer;
+  }
+}
 
 export async function TeacherStudents() {
   const actor = await getCurrentUser();
@@ -47,17 +94,15 @@ export async function TeacherStudents() {
             workspace.submissions,
             enrollment.studentId,
           );
-          const submissions = workspace.submissions.filter(
-            (item) =>
-              item.courseId === course.id &&
-              item.studentId === enrollment.studentId &&
-              item.courseVersion === course.version,
-          );
-          const latestByActivity = [
-            ...new Map(
-              submissions.map((item) => [item.activityId, item]),
-            ).values(),
-          ];
+          const submissions = workspace.submissions
+            .filter(
+              (item) =>
+                item.courseId === course.id &&
+                item.studentId === enrollment.studentId &&
+                item.courseVersion === course.version,
+            )
+            .slice()
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
           return (
             <section
               className="panel learner-panel"
@@ -87,12 +132,23 @@ export async function TeacherStudents() {
                   {progress.done} / {progress.total} activities
                 </span>
               </div>
-              {latestByActivity.length ? (
-                latestByActivity.map((submission) => (
+              {submissions.length ? (
+                submissions.map((submission) => (
                   <details className="submission-detail" key={submission.id}>
-                    <summary>View latest answers and feedback</summary>
+                    <summary>
+                      {activityTitle(course, submission.activityId)} ·{" "}
+                      {new Date(submission.createdAt).toLocaleString("en-US", {
+                        timeZone: "Asia/Shanghai",
+                      })}
+                    </summary>
                     <h4>Student answer</h4>
-                    <p className="prose-text">{submission.answer}</p>
+                    <p className="prose-text">
+                      {readableAnswer(
+                        course,
+                        submission.activityId,
+                        submission.answer,
+                      )}
+                    </p>
                     <h4>Learning feedback</h4>
                     <p className="prose-text muted">{submission.aiFeedback}</p>
                   </details>
