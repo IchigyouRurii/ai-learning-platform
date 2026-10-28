@@ -8,6 +8,38 @@ import {
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { EmptyState, PageHeading, ProgressBar } from "@/shared/ui/primitives";
 
+type QuizAnswerRecord = {
+  questionId: string;
+  selectedOptionIds: string[];
+};
+
+function parseQuizAnswers(value: string): QuizAnswerRecord[] | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    const records: QuizAnswerRecord[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const questionId = (item as { questionId?: unknown }).questionId;
+      const selected = (item as { selectedOptionIds?: unknown })
+        .selectedOptionIds;
+      if (
+        typeof questionId !== "string" ||
+        !Array.isArray(selected) ||
+        !selected.every((id: unknown) => typeof id === "string")
+      )
+        continue;
+      records.push({
+        questionId,
+        selectedOptionIds: selected as string[],
+      });
+    }
+    return records;
+  } catch {
+    return null;
+  }
+}
+
 export async function StudentProgress() {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
@@ -128,7 +160,83 @@ export async function StudentProgress() {
                     timeZone: "Asia/Shanghai",
                   })}
                 </small>
-                <p className="prose-text muted">{submission.aiFeedback}</p>
+                <p className="prose-text muted whitespace-pre-wrap">
+                  {submission.aiFeedback}
+                </p>
+                {activity?.type === "activity" &&
+                  activity.activity.type === "quiz" &&
+                  (() => {
+                    const answers = parseQuizAnswers(submission.answer);
+                    if (!answers) return null;
+                    return (
+                      <details className="submission-detail">
+                        <summary>View answer details and explanations</summary>
+                        <div className="mt-3 grid gap-3">
+                          {(activity.activity.questions ?? []).map(
+                            (question, index) => {
+                              const selected =
+                                answers.find(
+                                  (answer) =>
+                                    answer.questionId === question.id,
+                                )?.selectedOptionIds ?? [];
+                              const selectedText =
+                                selected
+                                  .map(
+                                    (id) =>
+                                      question.options.find(
+                                        (option) => option.id === id,
+                                      )?.text ?? id,
+                                  )
+                                  .join(", ") || "(no answer)";
+                              const correctText = question.correctOptionIds
+                                .map(
+                                  (id) =>
+                                    question.options.find(
+                                      (option) => option.id === id,
+                                    )?.text ?? id,
+                                )
+                                .join(", ");
+                              const correct =
+                                selected.length ===
+                                  question.correctOptionIds.length &&
+                                selected.every((id) =>
+                                  question.correctOptionIds.includes(id),
+                                );
+                              return (
+                                <div
+                                  key={question.id}
+                                  className="rounded-[var(--ui-control-radius)] border border-border p-3"
+                                >
+                                  <p className="text-sm font-medium">
+                                    Q{index + 1}. {question.prompt}
+                                  </p>
+                                  <p className="muted text-sm">
+                                    Your answer: {selectedText}{" "}
+                                    {correct ? "✓" : "✗"}
+                                  </p>
+                                  {!correct && (
+                                    <p className="muted text-sm">
+                                      Correct answer: {correctText}
+                                    </p>
+                                  )}
+                                  <p className="text-sm">
+                                    {question.explanation}
+                                  </p>
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      </details>
+                    );
+                  })()}
+                {activity?.type === "activity" &&
+                  activity.activity.type === "reflection" && (
+                    <details className="submission-detail">
+                      <summary>View your answer</summary>
+                      <p className="prose-text mt-2">{submission.answer}</p>
+                    </details>
+                  )}
               </article>
             );
           })
