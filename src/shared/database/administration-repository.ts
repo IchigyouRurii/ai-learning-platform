@@ -3,10 +3,6 @@ import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import type {
   AdminCourseEntry,
-  AdminClassroomEntry,
-  AdminClassroomDetail,
-  ClassroomMember,
-  CourseAssignment,
   AdminOverview,
   FeatureErrorCode,
   ModerationRecord,
@@ -75,17 +71,6 @@ function pageOf<T extends { id: string; createdAt: string }>(
 }
 const pattern = (value: string) => `%${value.replace(/[\\%_]/g, "\\$&")}%`;
 
-const classroomColumns = `cl.id, cl.teacher_id as "teacherId", teacher.name as "teacherName", cl.name, cl.description,
-  cl.created_at as "createdAt", cl.status, cl.archive_reason as "archiveReason", cl.archived_at as "archivedAt", moderator.name as "archivedByName",
-  (select count(*)::int from classroom_members m join "user" student on student.id = m.student_id and student.role = 'student' where m.class_id = cl.id) as "memberCount",
-  (select count(*)::int from course_assignments a where a.class_id = cl.id and a.revoked_at is null) as "assignmentCount"`;
-const classroomFrom = `classrooms cl join "user" teacher on teacher.id = cl.teacher_id left join "user" moderator on moderator.id = cl.archived_by`;
-const classroomView = (row: AdminClassroomEntry): AdminClassroomEntry => ({
-  ...row,
-  createdAt: time(row.createdAt),
-  archivedAt: row.archivedAt ? time(row.archivedAt) : null,
-});
-
 export function createAdministrationRepository(
   pool: Pool,
 ): AdministrationRepository {
@@ -125,182 +110,7 @@ export function createAdministrationRepository(
       client.release();
     }
   }
-  async function requireClassroom(db: PoolClient, classId: string) {
-    const result = await db.query<AdminClassroomEntry>(
-      `select ${classroomColumns} from ${classroomFrom} where cl.id = $1`,
-      [classId],
-    );
-    if (!result.rows[0])
-      throw new AdministrationError(
-        "NOT_FOUND",
-        "This classroom no longer exists.",
-      );
-    return classroomView(result.rows[0]);
-  }
-  async function lockClassroom(db: PoolClient, classId: string) {
-    const result = await db.query<{ status: "active" | "archived" }>(
-      "select status from classrooms where id = $1 for update",
-      [classId],
-    );
-    if (!result.rows[0])
-      throw new AdministrationError(
-        "NOT_FOUND",
-        "This classroom no longer exists.",
-      );
-    return result.rows[0];
-  }
-  async function auditClassroom(
-    db: PoolClient,
-    actor: User,
-    action: string,
-    classId: string,
-    summary: Record<string, unknown>,
-  ) {
-    await db.query(
-      `insert into admin_audit_events (id, admin_id, action, target_id, summary) values ($1,$2,$3,$4,$5::jsonb)`,
-      [randomUUID(), actor.id, action, classId, JSON.stringify(summary)],
-    );
-  }
   return {
-    listClassrooms: (actor, page) =>
-      transact(actor, async (db) => {
-        const values: unknown[] = [];
-        const where = ["true"];
-        if (page.search?.trim()) {
-          values.push(pattern(page.search.trim()));
-          where.push(
-            `(cl.name ilike $${values.length} or teacher.name ilike $${values.length})`,
-          );
-        }
-        if (page.status) {
-          values.push(page.status);
-          where.push(`cl.status = $${values.length}`);
-        }
-        const cursor = cursorParts(page.cursor);
-        if (cursor) {
-          values.push(cursor.id);
-          where.push(
-            `(cl.created_at, cl.id) < (select created_at, id from classrooms where id = $${values.length})`,
-          );
-        }
-        values.push(page.limit + 1);
-        const result = await db.query<AdminClassroomEntry>(
-          `select ${classroomColumns} from ${classroomFrom} where ${where.join(" and ")} order by cl.created_at desc, cl.id desc limit $${values.length}`,
-          values,
-        );
-        return pageOf(result.rows.map(classroomView), page.limit);
-      }),
-    getClassroom: (actor, classId) =>
-      transact(actor, async (db) => {
-        const exists = await db.query(
-          "select id from classrooms where id = $1 for share",
-          [classId],
-        );
-        if (!exists.rowCount)
-          throw new AdministrationError(
-            "NOT_FOUND",
-            "This classroom no longer exists.",
-          );
-        const classroom = await requireClassroom(db, classId);
-        const members = await db.query<ClassroomMember>(
-          `select m.class_id as "classId", m.joined_at as "joinedAt",
-        jsonb_build_object('id', u.id, 'name', u.name, 'role', u.role) as student
-        from classroom_members m join "user" u on u.id = m.student_id and u.role = 'student'
-        where m.class_id = $1 order by m.joined_at, m.student_id`,
-          [classId],
-        );
-        const assignments = await db.query<CourseAssignment>(
-          `select a.id, a.class_id as "classId", a.course_id as "courseId", a.course_version as "courseVersion",
-        r.content->>'title' as title, a.due_at as "dueAt", a.assigned_at as "assignedAt", cl.name as "className",
-        (cl.status = 'archived') as "classArchived", (cl.status = 'active' and c.status = 'published' and c.moderation_status = 'active') as available
-        from course_assignments a join classrooms cl on cl.id = a.class_id join courses c on c.id = a.course_id
-        join course_revisions r on r.course_id = a.course_id and r.version = a.course_version
-        where a.class_id = $1 and a.revoked_at is null order by a.assigned_at desc, a.id desc`,
-          [classId],
-        );
-        return {
-          classroom,
-          members: members.rows.map((row) => ({
-            ...row,
-            joinedAt: time(row.joinedAt),
-          })),
-          assignments: assignments.rows.map((row) => ({
-            ...row,
-            dueAt: row.dueAt ? time(row.dueAt) : null,
-            assignedAt: time(row.assignedAt),
-          })),
-        } satisfies AdminClassroomDetail;
-      }),
-    setClassroomStatus: (actor, input) =>
-      transact(actor, async (db) => {
-        const current = await lockClassroom(db, input.classId);
-        if (current.status !== input.expectedStatus)
-          throw new AdministrationError(
-            "CONFLICT",
-            "This classroom status changed. Refresh before trying again.",
-          );
-        if (current.status === input.status)
-          return requireClassroom(db, input.classId);
-        await db.query(
-          `update classrooms set status = $2,
-        archive_reason = case when $2 = 'archived' then $3 else '' end,
-        archived_by = case when $2 = 'archived' then $4 else null end,
-        archived_at = case when $2 = 'archived' then now() else null end where id = $1`,
-          [input.classId, input.status, input.reason, actor.id],
-        );
-        if (input.status === "archived")
-          await db.query(
-            "delete from classroom_join_codes where class_id = $1",
-            [input.classId],
-          );
-        await auditClassroom(
-          db,
-          actor,
-          input.status === "archived" ? "class.archived" : "class.restored",
-          input.classId,
-          { from: current.status, to: input.status, reason: input.reason },
-        );
-        return requireClassroom(db, input.classId);
-      }),
-    removeClassroomMember: (actor, input) =>
-      transact(actor, async (db) => {
-        await lockClassroom(db, input.classId);
-        const removed = await db.query(
-          "delete from classroom_members where class_id = $1 and student_id = $2 returning student_id",
-          [input.classId, input.studentId],
-        );
-        if (removed.rowCount) {
-          await db.query(
-            "delete from classroom_join_codes where class_id = $1",
-            [input.classId],
-          );
-          await auditClassroom(
-            db,
-            actor,
-            "class.member_removed",
-            input.classId,
-            { studentId: input.studentId, reason: input.reason },
-          );
-        }
-        return Boolean(removed.rowCount);
-      }),
-    removeClassroomAssignment: (actor, input) =>
-      transact(actor, async (db) => {
-        await lockClassroom(db, input.classId);
-        const removed = await db.query(
-          "update course_assignments set revoked_at = now() where class_id = $1 and id = $2 and revoked_at is null returning id",
-          [input.classId, input.assignmentId],
-        );
-        if (removed.rowCount)
-          await auditClassroom(
-            db,
-            actor,
-            "class.assignment_removed",
-            input.classId,
-            { assignmentId: input.assignmentId, reason: input.reason },
-          );
-        return Boolean(removed.rowCount);
-      }),
     getOverview: (actor) =>
       transact(actor, async (client) => {
         const users = await client.query<
@@ -322,12 +132,7 @@ export function createAdministrationRepository(
           count(*) filter (where moderation_status = 'withdrawn')::int as "withdrawnCourses"
          from courses where visibility = 'cohort'`,
         );
-        const classrooms = await client.query<
-          Pick<AdminOverview, "classrooms" | "archivedClassrooms">
-        >(
-          `select count(*)::int as classrooms, count(*) filter(where status = 'archived')::int as "archivedClassrooms" from classrooms`,
-        );
-        return { ...users.rows[0], ...courses.rows[0], ...classrooms.rows[0] };
+        return { ...users.rows[0], ...courses.rows[0] };
       }),
     listUsers: (actor, page) =>
       transact(actor, async (client) => {

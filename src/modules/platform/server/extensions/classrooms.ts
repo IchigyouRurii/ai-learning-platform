@@ -1,4 +1,8 @@
 import "server-only";
-import { getClassroomRepository } from "@/shared/database/classrooms";
-import { createClassroomService } from "../classroom-service";
-export const classrooms = createClassroomService(getClassroomRepository);
+import { classroomFeatures } from "@/shared/contracts/features";
+import { createReservedService } from "./reserved-service";
+
+export const classrooms = createReservedService(
+  "classrooms",
+  classroomFeatures,
+);

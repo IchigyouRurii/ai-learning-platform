@@ -11,7 +11,6 @@ import {
   Sparkles,
   Users,
   BookOpen,
-  School,
 } from "lucide-react";
 import type { Role } from "@/shared/contracts";
 
@@ -23,7 +22,6 @@ export function Navigation({ role }: { role: Role }) {
           { href: "/admin", label: "Platform overview", icon: LayoutGrid },
           { href: "/admin/users", label: "Users & access", icon: Users },
           { href: "/admin/courses", label: "Teaching courses", icon: BookOpen },
-          { href: "/admin/classes", label: "Classrooms", icon: School },
         ]
       : role === "teacher"
         ? [
@@ -33,7 +31,6 @@ export function Navigation({ role }: { role: Role }) {
               label: "My Creations",
               icon: FileText,
             },
-            { href: "/teacher/classes", label: "My Classes", icon: School },
             {
               href: "/teacher/students",
               label: "Teaching Management",
@@ -46,7 +43,6 @@ export function Navigation({ role }: { role: Role }) {
               label: "Course Marketplace",
               icon: GraduationCap,
             },
-            { href: "/student/classes", label: "My Classes", icon: School },
             {
               href: "/student/studio",
               label: "AI Studio",

@@ -111,16 +111,14 @@ package.json                     # 项目依赖与运行命令
 
 ## 4.管理员工作台
 
-管理员登录后进入 `/admin`，可查看平台汇总、在 `/admin/users` 搜索用户并调整角色、在 `/admin/courses` 查询教学课程元数据并说明原因下架，在 `/admin/classes` 查看全平台班级、成员与课程安排，并可归档/恢复班级、移除成员或撤销安排。普通注册仍默认创建学生，用户无法自行选择管理员角色。
+管理员登录后进入 `/admin`，可查看平台汇总、在 `/admin/users` 搜索用户并调整角色、在 `/admin/courses` 查询教学课程元数据并说明原因下架。普通注册仍默认创建学生，用户无法自行选择管理员角色。
 
-管理员相关迁移为 `202610270001_administration.sql` 和 `202610270003_admin_classrooms.sql`（班级基础使用中间的 002 迁移）。由数据库负责人执行一次 `bash scripts/local.sh db:migrate`，其他成员共享同一个 Neon 数据库时无需重复初始化。
+用户和课程管理使用 `202610270001_administration.sql`。班级相关的 002、003 历史迁移继续保留，但当前不提供班级页面和操作。由数据库负责人执行一次 `bash scripts/local.sh db:migrate`，其他成员共享同一个 Neon 数据库时无需重复初始化。
 
 界面沿用现有 AppShell、shadcn/ui、Lucide 图标及公共主题。管理员代码位于 `src/modules/platform/admin/`，服务复用 `platformExtensions.administration`；其他扩展域仍按各自状态开发。操作规则与验收说明见 [管理员功能](docs/engineering/administration.md)。
 
-## 5.班级管理
+## 5.班级管理交接（2026-10-28）
 
-教师在 `/teacher/classes` 创建/编辑班级，生成 7 天邀请码或按已有学生邮箱导入成员，再分配已发布课程的指定版本和可选截止日期；可移除成员和撤销分配。学生在 `/student/classes` 加入班级并学习分配版本。
+为采用协作者的 `feat/class-management`，本分支已移除重复的教师、学生和管理员班级实现及导航入口。原有班级契约与 `platformExtensions.classrooms` 恢复为预留状态，合法调用返回 `NOT_IMPLEMENTED`；班级页面在协作者接入前暂不可用。
 
-需要新增迁移 `202610270002_classrooms.sql`，由负责人执行 `bash scripts/local.sh db:migrate`。班级授予的访问与原有独立选课分开；移除成员保留学习记录，不影响其他合法选课。截止日期仅作提醒，暂不发送邀请邮件。详见 [班级管理](docs/engineering/classrooms.md)。
-
-管理员归档班级会暂停班级授予的访问并撤销邀请码，保留成员/课程安排和学习历史；恢复后教师需生成新码，课程下架状态继续有效。操作需填写原因并记审计。
+数据库迁移及已有数据保留，不运行回滚或删除 SQL。学习流程暂只使用独立选课；原班级授权记录保留，但不用于授予访问。学生仍可主动加入未下架的公开教学课程。协作者合并前需处理当前数据库结构、报名来源和管理员下架规则的兼容性，详见 [班级交接说明](docs/engineering/classrooms.md)。

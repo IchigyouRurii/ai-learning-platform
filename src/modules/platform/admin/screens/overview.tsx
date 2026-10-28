@@ -5,8 +5,6 @@ import {
   CheckCheck,
   ShieldCheck,
   ShieldOff,
-  School,
-  Archive,
   Users,
 } from "lucide-react";
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -55,18 +53,6 @@ export async function AdminOverviewScreen() {
               detail="Learning access suspended"
               icon={<ShieldOff size={17} />}
             />
-            <StatCard
-              label="Classrooms"
-              value={result.data.classrooms}
-              detail="Classes across all teachers"
-              icon={<School size={17} />}
-            />
-            <StatCard
-              label="Archived classes"
-              value={result.data.archivedClassrooms}
-              detail="Class learning access paused"
-              icon={<Archive size={17} />}
-            />
           </section>
           <div className={styles.split}>
             <section className="panel">
@@ -94,18 +80,6 @@ export async function AdminOverviewScreen() {
                   <strong className={styles.name}>Teaching courses</strong>
                   <span className={styles.secondary}>
                     Review course details and withdraw unsuitable content.
-                  </span>
-                </span>
-                <ArrowUpRight size={19} />
-              </Link>
-              <Link href="/admin/classes" className={styles.quickLink}>
-                <span className={styles.quickIcon}>
-                  <School size={21} />
-                </span>
-                <span className={styles.quickBody}>
-                  <strong className={styles.name}>Classrooms</strong>
-                  <span className={styles.secondary}>
-                    Review classes, members and assignments.
                   </span>
                 </span>
                 <ArrowUpRight size={19} />

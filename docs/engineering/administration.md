@@ -5,7 +5,6 @@
 - `/admin`：真实用户角色、教学课程、可学习课程、下架课程的数量汇总。
 - `/admin/users`：按姓名/邮箱搜索、按角色筛选、分页，查看账号与邮箱验证状态，确认后修改角色。
 - `/admin/courses`：按标题/学科/教师搜索、按上下架状态筛选、分页，查看课程简介、目标、章节标题，填写原因后下架。
-- `/admin/classes`：全平台班级列表，按班名/教师搜索、按 active/archived 筛选和分页；详情查看负责教师、成员、指定版本课程安排。
 - 页面、布局和 Server Actions 均检查服务器会话。学生与教师不能使用管理员服务；仓储会再次查询数据库中的管理员身份。
 
 界面为英文，复用公共 AppShell、PageHeading、StatCard、Button、Input、Dialog、Table 和 Lucide 图标。局部布局放 `platform/admin/admin.module.css`，沿用 `--ui-*` 主题变量，不新增组件库或全局主题。
@@ -38,7 +37,7 @@
 
 ## 协作入口
 
-- 合同：`shared/contracts/features/administration.ts`，十项 administration 操作标为 implemented；个人资料操作仍为 reserved。
+- 合同：`shared/contracts/features/administration.ts`，五项 administration 操作标为 implemented；个人资料操作仍为 reserved。
 - Neon 仓储：`shared/database/administration-repository.ts`；只在 `APP_MODE=neon` 中提供管理员工具。
 - 服务：`platform/server/administration-service.ts`；从 `@/modules/platform` 的 `platformExtensions.administration` 调用。
 - 客户端调用 Server Actions：`@/modules/platform/actions`。不要在客户端导入包含服务器服务的根 barrel。
@@ -50,27 +49,6 @@
 
 修改后运行 `bash scripts/local.sh check`。人工验收应包含管理员总览、两类列表/搜索、详情与确认弹窗、窄屏横向表格滚动，以及学生/教师访问管理网址被阻止。真实管理操作应由负责人选择明确的测试账号/课程进行，避免拿同学的常用账号或正式课程做试验。
 
-## 全平台班级管理
+## 班级功能交接（2026-10-28）
 
-新增迁移 `202610270003_admin_classrooms.sql`，给 classrooms 增加 active/archived 状态、归档原因、管理员与时间，并扩展管理审计的 action 约束。旧迁移不可修改。
-
-管理员可查看所有班级和安全元数据，在确认并填写原因后归档/恢复班级、移除成员或撤销课程分配。创建班级、添加学生、安排课程仍通过教师工作台完成；这次不提供更换班级教师或永久删除班级。
-
-- 归档暂停加入、编辑班级、成员/课程日常变更，以及该班级授予的全部版本学习和提交。成员、分配、快照、提交和反馈保留；已有独立选课及其他活动班级授予的访问不受影响。
-- 教师/成员仍可查看归档班级、归档原因和历史安排，页面显示 Archived 状态并收起日常操作；分配表区分 Class archived 与课程 Withdrawn。
-- 归档会撤销当前邀请码。恢复后原成员与未撤销分配重新有效，但旧邀请码不复活，教师须生成新码。课程下架仍优先阻止学习。
-- 管理员移除成员时也撤销班级旧邀请码，防止该成员持旧码立即重新加入；其他成员仍保留。此副作用在确认弹窗说明。
-- 状态改变核对 expectedStatus，拒绝陈旧操作。归档/恢复、成员移除、分配软撤销和审计均在事务中执行；审计失败全部回滚，不保留一半成功的状态。
-- 学习授权的服务查询与 SQL 写入均核对班级状态；提交对班级/成员/分配共享锁与管理写入协调。不能只在网页上隐藏按钮。
-- 目录/详情不返回邀请码、私有正文、测验答案或学生回答。管理员只能通过管理服务访问全平台，教师/学生接口的原资源边界保留。
-
-本领域新增操作：`listClassrooms / getClassroom / setClassroomStatus / removeClassroomMember / removeClassroomAssignment`。接口仍由 `platformExtensions.administration` 提供；客户端动作从 `@/modules/platform/actions` 导入，页面放 `platform/admin`。
-
-隔离 PostgreSQL 测试覆盖跨班级访问边界、元数据隔离、搜索/分页/状态筛选、归档/恢复授权、旧码失效、原选课保留、课程下架优先、管理移除/撤销，以及审计失败时的原子回滚。
-
-## 管理员班级功能验收（2026-10-27）
-
-- 新迁移已应用到已配置的 Neon；原有班级、成员、课程和学习记录保留。
-- lint、类型检查、15 个测试文件 / 105 项测试及 Next.js 生产构建通过。
-- 管理员真实登录后验收导航/汇总、班级列表、归档确认表单、归档筛选与恢复；仅操作临时空班级。临时班级及两条测试审计已清理，原有 1 个班级及 3 名成员保持正常。
-- 未更改真实成员角色、归档真实班级、提交真实练习、调用 AI、推送或部署代码。
+管理员班级页面、统计和操作已随重复班级实现撤回，等待协作者实现接入后再适配。用户管理、角色调整、教学课程管理与下架保持可用。班级相关迁移及历史数据保留，已有班级的教师所有权保护仍有效。详见 [班级交接说明](classrooms.md)。

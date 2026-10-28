@@ -60,30 +60,6 @@ export function createAdministrationService(
     };
   }
   return Object.freeze({
-    listClassrooms: bind(
-      administrationFeatures.listClassrooms,
-      (repo, actor, input) => repo.listClassrooms(actor, input),
-    ),
-    getClassroom: bind(
-      administrationFeatures.getClassroom,
-      (repo, actor, input) => repo.getClassroom(actor, input.classId),
-    ),
-    setClassroomStatus: bind(
-      administrationFeatures.setClassroomStatus,
-      (repo, actor, input) => repo.setClassroomStatus(actor, input),
-    ),
-    removeClassroomMember: bind(
-      administrationFeatures.removeClassroomMember,
-      async (repo, actor, input) => ({
-        removed: await repo.removeClassroomMember(actor, input),
-      }),
-    ),
-    removeClassroomAssignment: bind(
-      administrationFeatures.removeClassroomAssignment,
-      async (repo, actor, input) => ({
-        removed: await repo.removeClassroomAssignment(actor, input),
-      }),
-    ),
     getOverview: bind(administrationFeatures.getOverview, (repo, actor) =>
       repo.getOverview(actor),
     ),
