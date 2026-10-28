@@ -5,6 +5,7 @@ import { requiredEmail, runDatabaseTask } from "./common";
 
 await runDatabaseTask(async (pool) => {
   const email = requiredEmail();
+  const replace = process.argv.includes("--replace");
   const owner = await pool.query(
     `select id from "user" where lower(email) = $1 and role = 'teacher'`,
     [email],
@@ -17,6 +18,14 @@ await runDatabaseTask(async (pool) => {
   const client = await pool.connect();
   try {
     await client.query("begin");
+    let removed = 0;
+    if (replace) {
+      const deleted = await client.query(
+        "delete from courses where owner_id = $1 and seed_key is not null",
+        [owner.rows[0].id],
+      );
+      removed = deleted.rowCount ?? 0;
+    }
     let count = 0;
     for (const example of createSeedState().courses) {
       const content = courseDraftSchema.parse(example);
@@ -37,7 +46,9 @@ await runDatabaseTask(async (pool) => {
       count += 1;
     }
     await client.query("commit");
-    console.log(`已添加 ${count} 门短示例课程。已有示例不会重复添加。`);
+    console.log(
+      `${replace ? `已删除 ${removed} 门旧示例课程；` : ""}已添加 ${count} 门短示例课程。已有示例不会重复添加。`,
+    );
   } catch (error) {
     await client.query("rollback");
     throw error;

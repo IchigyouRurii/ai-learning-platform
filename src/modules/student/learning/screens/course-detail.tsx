@@ -10,6 +10,7 @@ import {
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { toSafeActivity } from "@/shared/contracts";
 import { Badge, PageHeading, ProgressBar } from "@/shared/ui/primitives";
+import { StudentCourseDiscussion } from "@/modules/student/discussions/screens/course-discussion";
 import { ActivityForm } from "../../activities/components/activity-form";
 import { EnrollButton } from "../../activities/components/enroll-button";
 import { QuizForm } from "../../activities/components/quiz-form";
@@ -180,6 +181,12 @@ export async function StudentCourseDetail({
           </Link>
         </aside>
       </div>
+      {enrolled && (
+        <StudentCourseDiscussion
+          courseId={course.id}
+          courseVersion={course.version}
+        />
+      )}
     </>
   );
 }

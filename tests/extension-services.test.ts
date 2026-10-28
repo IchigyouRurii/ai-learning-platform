@@ -192,7 +192,7 @@ const actor: User = { id: "actor", name: "测试用户", role: "teacher" };
 
 describe("reserved service boundaries", () => {
   it("has a validated, fail-closed entry point for every declared operation without calling external systems", async () => {
-    let count = 0;
+    let reservedCount = 0;
     for (const [domain, definitions] of Object.entries(extensionDefinitions)) {
       const service = platformExtensions[
         domain as keyof typeof platformExtensions
@@ -216,6 +216,7 @@ describe("reserved service boundaries", () => {
               examples[name],
             ),
           ).toMatchObject({ ok: false, code: "NOT_IMPLEMENTED" });
+          reservedCount++;
         }
         expect(await service[name](null, examples[name])).toMatchObject({
           ok: false,
@@ -228,23 +229,35 @@ describe("reserved service boundaries", () => {
           expect(
             await service[name]({ ...actor, role: denied }, examples[name]),
           ).toMatchObject({ ok: false, code: "FORBIDDEN" });
-        count++;
       }
     }
-    expect(getExtensionCapabilities()).toHaveLength(count);
+    const capabilities = getExtensionCapabilities();
+    const total = Object.values(extensionDefinitions).reduce(
+      (sum, definitions) => sum + Object.keys(definitions).length,
+      0,
+    );
+    const implemented = capabilities.filter(
+      (item) => item.status === "implemented",
+    );
+    const discussionCapabilities = capabilities.filter((item) =>
+      item.operation.startsWith("discussions."),
+    );
+    expect(capabilities).toHaveLength(total);
     expect(
-      getExtensionCapabilities().filter(
-        (item) => item.status === "implemented",
+      capabilities.filter((item) => item.status === "reserved"),
+    ).toHaveLength(reservedCount);
+    expect(implemented).toHaveLength(28);
+    expect(
+      implemented.every(
+        (item) =>
+          item.operation.startsWith("administration.") ||
+          item.operation.startsWith("classrooms.") ||
+          item.operation.startsWith("discussions."),
       ),
-    ).toHaveLength(23);
+    ).toBe(true);
+    expect(discussionCapabilities).toHaveLength(5);
     expect(
-      getExtensionCapabilities()
-        .filter((item) => item.status === "implemented")
-        .every(
-          (item) =>
-            item.operation.startsWith("administration.") ||
-            item.operation.startsWith("classrooms."),
-        ),
+      discussionCapabilities.every((item) => item.status === "implemented"),
     ).toBe(true);
     expect(external.database).not.toHaveBeenCalled();
     expect(external.ai).not.toHaveBeenCalled();
