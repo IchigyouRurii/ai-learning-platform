@@ -136,6 +136,14 @@ async function enrollmentIds(courseId: string) {
   return result.rows.map((row) => row.student_id);
 }
 
+async function directAccess(courseId: string, studentId: string) {
+  const result = await postgres.pool.query<{ direct_access: boolean }>(
+    "select direct_access from enrollments where course_id = $1 and student_id = $2",
+    [courseId, studentId],
+  );
+  return result.rows[0]?.direct_access;
+}
+
 async function rowCount(table: string) {
   const result = await postgres.pool.query<{ count: number }>(
     `select count(*)::int as count from ${table}`,
@@ -339,6 +347,41 @@ describe("classroom roster service", () => {
       student.id,
       otherStudent.id,
     ]);
+    expect(await directAccess("course-1", student.id)).toBe(false);
+    expect(await directAccess("course-1", otherStudent.id)).toBe(true);
+  });
+
+  it("keeps access through another active class and restores it when re-added", async () => {
+    const first = await createClass({
+      name: "First",
+      studentIds: [student.id],
+    });
+    const second = await createClass({
+      name: "Second",
+      studentIds: [student.id],
+    });
+
+    await service.removeMember(teacher, {
+      classId: first.id,
+      studentId: student.id,
+    });
+    expect(await directAccess("course-1", student.id)).toBe(true);
+
+    await service.removeMember(teacher, {
+      classId: second.id,
+      studentId: student.id,
+    });
+    expect(await directAccess("course-1", student.id)).toBe(false);
+
+    const readded = await service.importStudents(teacher, {
+      classId: first.id,
+      emails: ["student1@example.com"],
+    });
+    expect(readded).toMatchObject({
+      ok: true,
+      data: { added: [student.id] },
+    });
+    expect(await directAccess("course-1", student.id)).toBe(true);
   });
 
   it("deletes a class only for the owning teacher and keeps enrollment", async () => {

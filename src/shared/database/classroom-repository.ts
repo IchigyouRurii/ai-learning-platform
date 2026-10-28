@@ -126,7 +126,8 @@ export function createNeonClassroomRepository(
           await client.query(
             `insert into enrollments (course_id, student_id)
              select $1, unnest($2::text[])
-             on conflict (course_id, student_id) do nothing`,
+             on conflict (course_id, student_id)
+             do update set direct_access = true`,
             [input.courseId, studentIds],
           );
         }
@@ -282,7 +283,8 @@ export function createNeonClassroomRepository(
           await client.query(
             `insert into enrollments (course_id, student_id)
              select $1, unnest($2::text[])
-             on conflict (course_id, student_id) do nothing`,
+             on conflict (course_id, student_id)
+             do update set direct_access = true`,
             [courseId, ids],
           );
         }
@@ -300,14 +302,51 @@ export function createNeonClassroomRepository(
       }
     },
     async removeMember(actor, classId, studentId) {
-      const result = await pool.query(
-        `delete from classroom_members m using classrooms c
-         where m.class_id = $1 and m.student_id = $2
-         and c.id = m.class_id and c.teacher_id = $3
-         returning m.student_id`,
-        [classId, studentId, actor.id],
-      );
-      return Boolean(result.rowCount);
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const owned = await client.query<{ course_id: string }>(
+          "select course_id from classrooms where id = $1 and teacher_id = $2 for update",
+          [classId, actor.id],
+        );
+        if (!owned.rowCount) {
+          await client.query("rollback");
+          return false;
+        }
+        const courseId = owned.rows[0].course_id;
+        const removed = await client.query(
+          `delete from classroom_members
+           where class_id = $1 and student_id = $2
+           returning student_id`,
+          [classId, studentId],
+        );
+        if (!removed.rowCount) {
+          await client.query("rollback");
+          return false;
+        }
+        const otherClass = await client.query(
+          `select 1 from classroom_members m
+           join classrooms c on c.id = m.class_id
+           where m.student_id = $1 and c.course_id = $2
+             and m.class_id <> $3 and c.status = 'active'
+           limit 1`,
+          [studentId, courseId, classId],
+        );
+        if (!otherClass.rowCount) {
+          await client.query(
+            `update enrollments set direct_access = false
+             where course_id = $1 and student_id = $2`,
+            [courseId, studentId],
+          );
+        }
+        await client.query("commit");
+        return true;
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   };
 }
