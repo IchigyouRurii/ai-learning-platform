@@ -9,7 +9,7 @@
 - 合同：`shared/contracts/features/classrooms.ts`；服务：`platform/server/extensions/classrooms.ts`；仓储：`shared/database/classroom-repository.ts`。
 - 当前模型是**一个班级绑定一门课程**（`classrooms.course_id`）。`course_assignments` 表保留，但当前班级 UI 不使用多课程/多版本分配。
 - 邀请码、邮件邀请、管理员班级治理页面未恢复；管理员用户/课程管理和课程下架保留。
-- 学生完成率仍是样例数据，待教师学习追踪接入真实提交/测验数据。
+- 教师班级详情已接入真实活动提交与章节完成数据：显示每个学生的活动完成数、章节完成数、最近活动，以及班级平均完成、完成人数和需关注人数。
 
 ## 数据库与迁移
 

@@ -23,11 +23,11 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 ## 三层合同
 
-| 层        | 文件                                            | 约定                                                                                                            |
-| --------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 输入/输出 | `src/shared/contracts/features/*.ts`            | Zod schema、可推导 TS 类型、角色、资源规则、预留状态                                                            |
+| 层        | 文件                                            | 约定                                                                                             |
+| --------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 输入/输出 | `src/shared/contracts/features/*.ts`            | Zod schema、可推导 TS 类型、角色、资源规则、预留状态                                             |
 | 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；administration、classrooms 与 discussions 按操作状态启用，其他预留操作逐项实现 |
-| 存储端口  | `src/shared/database/extension-repositories.ts` | 具名且 actor-scoped 的查询与写入；未来 Neon adapter 必须实现所有权及版本条件                                    |
+| 存储端口  | `src/shared/database/extension-repositories.ts` | 具名且 actor-scoped 的查询与写入；未来 Neon adapter 必须实现所有权及版本条件                     |
 
 现有 `PlatformRepository` 不被扩展成一大组假方法。新端口与其并存，逐个领域接入真实 adapter 后启用，避免为了添加类型而破坏现有数据库适配器。
 
@@ -126,6 +126,8 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 章节完成、活动提交、测验成绩为三个独立指标。重复尝试保存历史，进度按活动去重，成绩默认取该版本该活动的最近一次有效评分，不把多次得分相加；角色扮演结束计为该活动参与完成。学习记录均带 courseVersion。评分结果须满足 0 ≤ score ≤ maxScore，未评分两者都为 null。
 
+**当前实现：** 章节完成已通过 `PlatformRepository.completeLesson` 和 `lesson_completions` 表接入学生课程页与教师班级进度；`platformExtensions.learning` 仍是 reserved，不能把两者混为一谈。活动提交和测验历史继续使用现有 `submissions`，学生历史页已展示选项、正确答案、解释和 AI 反馈。
+
 提交和发送对话带 idempotencyKey。实现时同一用户+同一操作+key 幂等；同 key 不同内容返回 CONFLICT。角色扮演消息的角色、对话历史和 AI 回复不能由客户端伪造。
 
 coding、simulation、game 已有题面/回答的基础结构，执行、模拟和计分规则仍需各自实现。代码执行必须由独立沙箱服务承接，不能在 Next.js 服务器执行学生代码。
@@ -210,3 +212,10 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - `platformExtensions.discussions` 由预留工厂替换为真实服务；仓储权限条件写在参数化 SQL 中，覆盖课程成员、课程所有者、提问者/教师解决、版本与章节校验。
 - 新增 pglite 集成测试，覆盖非成员不可见、跨教师不可见、学生互相回答、解决权限、旧版本和未知章节。`pnpm lint`、`pnpm typecheck`、`pnpm test` 通过（11 个测试文件、57 项测试）。
 - 已在 Neon 分支 `discussions-dev` 执行迁移并完成浏览器手工验收；主库尚未迁移，部署前须在主库执行迁移。
+
+## 本次验证记录（2026-10-29）
+
+- 新增 `lesson_completions` 表与 `PlatformRepository.completeLesson`，学生课程页可标记章节完成，进度按学生/课程/版本/章节幂等记录。
+- 教师班级详情改为真实活动提交与章节完成统计；学生进度页显示章节完成数。
+- 学生历史页展示测验选项、正确答案、解释、反思回答和 AI 反馈。
+- 相关测试覆盖章节完成幂等、未选课/未知章节拒绝，以及班级/讨论区回归。
