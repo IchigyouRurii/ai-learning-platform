@@ -1,7 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
-import { getCurrentUser, platformExtensions } from "@/modules/platform";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
+  CheckCircle2,
+  Users,
+} from "lucide-react";
+import {
+  calculateProgress,
+  getCurrentUser,
+  getWorkspace,
+  platformExtensions,
+} from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import {
   Table,
@@ -16,21 +27,16 @@ import {
   EmptyState,
   PageHeading,
   ProgressBar,
+  StatCard,
 } from "@/shared/ui/primitives";
 import { DeleteClassButton } from "../components/delete-class-button";
 import { RemoveMemberButton } from "../components/remove-member-button";
 import { StudentPicker } from "../components/student-picker";
 
-const SAMPLE_COMPLETION = [18, 32, 45, 57, 66, 74, 83, 91];
-
-function sampleCompletion(classId: string, studentId: string) {
-  let hash = 2166136261;
-  for (const char of `${classId}:${studentId}`) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return SAMPLE_COMPLETION[(hash >>> 0) % SAMPLE_COMPLETION.length];
-}
+const dateLabel = (value: string) =>
+  new Date(value).toLocaleDateString("en-US", {
+    timeZone: "Asia/Shanghai",
+  });
 
 export async function TeacherClassDetail({
   id,
@@ -41,14 +47,16 @@ export async function TeacherClassDetail({
 }) {
   const user = await getCurrentUser();
   if (user.role !== "teacher") return <RoleGate expected="teacher" />;
-  const [classroomResult, membersResult, studentsResult] = await Promise.all([
-    platformExtensions.classrooms.get(user, { classId: id }),
-    platformExtensions.classrooms.listMembers(user, { classId: id }),
-    platformExtensions.classrooms.listStudents(user, {
-      search: query,
-      limit: 200,
-    }),
-  ]);
+  const [classroomResult, membersResult, studentsResult, workspace] =
+    await Promise.all([
+      platformExtensions.classrooms.get(user, { classId: id }),
+      platformExtensions.classrooms.listMembers(user, { classId: id }),
+      platformExtensions.classrooms.listStudents(user, {
+        search: query,
+        limit: 200,
+      }),
+      getWorkspace(user),
+    ]);
   if (!classroomResult.ok) {
     if (classroomResult.code === "NOT_FOUND") notFound();
     return (
@@ -74,6 +82,43 @@ export async function TeacherClassDetail({
         (student) => !memberEmails.has(student.email.toLowerCase()),
       )
     : [];
+  const course = workspace.courses.find(
+    (item) => item.id === classroom.courseId,
+  );
+  const rows = members.map((member) => {
+    const progress = course
+      ? calculateProgress(course, workspace.submissions, member.student.id)
+      : null;
+    const latest = course
+      ? workspace.submissions
+          .filter(
+            (item) =>
+              item.courseId === course.id &&
+              item.courseVersion === course.version &&
+              item.studentId === member.student.id,
+          )
+          .slice()
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+      : undefined;
+    return { member, progress, latest };
+  });
+  const tracked = rows.filter(
+    (row): row is typeof row & { progress: NonNullable<typeof row.progress> } =>
+      row.progress !== null,
+  );
+  const averagePercent = tracked.length
+    ? Math.round(
+        tracked.reduce((sum, row) => sum + row.progress.percent, 0) /
+          tracked.length,
+      )
+    : 0;
+  const completedCount = tracked.filter(
+    (row) => row.progress.percent === 100,
+  ).length;
+  const needsAttention = tracked.filter(
+    (row) => row.progress.percent < 50,
+  ).length;
+
   return (
     <>
       <Link href="/teacher/classes" className="back-link">
@@ -105,18 +150,51 @@ export async function TeacherClassDetail({
           {classroom.courseTitle}
         </Link>
       </p>
+      {!course && (
+        <p className="error-text" role="alert">
+          The course bound to this class is not available in your workspace, so
+          progress cannot be calculated.
+        </p>
+      )}
+      <section className="stats-grid" aria-label="Class progress summary">
+        <StatCard
+          label="Students"
+          value={members.length}
+          detail="Current class members"
+          icon={<Users size={17} />}
+        />
+        <StatCard
+          label="Average completion"
+          value={`${averagePercent}%`}
+          detail="Based on submitted activities"
+          icon={<BarChart3 size={17} />}
+        />
+        <StatCard
+          label="Completed"
+          value={completedCount}
+          detail="Students at 100%"
+          icon={<CheckCircle2 size={17} />}
+        />
+        <StatCard
+          label="Needs attention"
+          value={needsAttention}
+          detail="Below 50% completion"
+          icon={<AlertTriangle size={17} />}
+        />
+      </section>
       <div className="detail-grid">
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <h2>Student roster</h2>
+              <h2>Student progress</h2>
               <p className="muted">
-                Students added here can see this class in My Classes.
-                Completion values are sample data until real submission
-                tracking is connected.
+                Completion is based on activity submissions for the course bound
+                to this class. It is not a mastery score.
               </p>
             </div>
-            <Badge tone="amber">Sample data</Badge>
+            <Link href="/teacher/students" className="text-link">
+              View submissions &amp; feedback
+            </Link>
           </div>
           {!membersResult.ok ? (
             <p className="error-text" role="alert">
@@ -133,34 +211,35 @@ export async function TeacherClassDetail({
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Joined</TableHead>
-                  <TableHead>Completion (sample)</TableHead>
+                  <TableHead>Activities</TableHead>
+                  <TableHead>Completion</TableHead>
+                  <TableHead>Last activity</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {members.map((member) => (
+                {rows.map(({ member, progress, latest }) => (
                   <TableRow key={member.student.id}>
                     <TableCell className="font-medium">
                       {member.student.name}
                     </TableCell>
                     <TableCell>{member.student.email}</TableCell>
+                    <TableCell>{dateLabel(member.joinedAt)}</TableCell>
                     <TableCell>
-                      {new Date(member.joinedAt).toLocaleDateString("en-US", {
-                        timeZone: "Asia/Shanghai",
-                      })}
+                      {progress
+                        ? `${progress.done} / ${progress.total}`
+                        : "Not available"}
                     </TableCell>
                     <TableCell>
                       <div className="min-w-28">
-                        <ProgressBar
-                          percent={sampleCompletion(
-                            classroom.id,
-                            member.student.id,
-                          )}
-                        />
+                        <ProgressBar percent={progress?.percent ?? 0} />
                         <span className="form-hint">
-                          {sampleCompletion(classroom.id, member.student.id)}%
+                          {progress ? `${progress.percent}%` : "—"}
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {latest ? dateLabel(latest.createdAt) : "No activity yet"}
                     </TableCell>
                     <TableCell className="text-right">
                       <RemoveMemberButton
