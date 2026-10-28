@@ -19,6 +19,8 @@ export type QuizProgress = {
   passedLessons: number;
   totalQuizzes: number;
   passedQuizzes: number;
+  bestScorePercent: number | null;
+  averageScorePercent: number | null;
   completed: boolean;
 };
 
@@ -34,6 +36,7 @@ export function calculateQuizProgress(
       item.studentId === studentId,
   );
 
+  const allBestScores: number[] = [];
   const lessons = course.lessons.map((lesson): QuizLessonProgress => {
     const quizIds = lesson.blocks.flatMap((block) =>
       block.type === "activity" && block.activity.type === "quiz"
@@ -55,6 +58,7 @@ export function calculateQuizProgress(
     const numericScores = bestScores.filter(
       (score): score is number => score !== null,
     );
+    allBestScores.push(...numericScores);
     const passedQuizzes = numericScores.filter(
       (score) => score >= QUIZ_PASS_RATIO,
     ).length;
@@ -85,6 +89,16 @@ export function calculateQuizProgress(
       (sum, lesson) => sum + lesson.passedQuizzes,
       0,
     ),
+    bestScorePercent: allBestScores.length
+      ? Math.round(Math.max(...allBestScores) * 100)
+      : null,
+    averageScorePercent: allBestScores.length
+      ? Math.round(
+          (allBestScores.reduce((sum, score) => sum + score, 0) /
+            allBestScores.length) *
+            100,
+        )
+      : null,
     completed: withQuizzes.length > 0 && passedLessons === withQuizzes.length,
   };
 }

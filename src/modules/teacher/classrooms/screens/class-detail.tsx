@@ -140,12 +140,27 @@ export async function TeacherClassDetail({
             row.quiz?.lessons.find((item) => item.lessonId === lesson.id)
               ?.passed,
         ).length;
+        const scores = rows
+          .map(
+            (row) =>
+              row.quiz?.lessons.find((item) => item.lessonId === lesson.id)
+                ?.bestScorePercent,
+          )
+          .filter(
+            (score): score is number => score !== null && score !== undefined,
+          );
+        const averageScore = scores.length
+          ? Math.round(
+              scores.reduce((sum, score) => sum + score, 0) / scores.length,
+            )
+          : null;
         return [
           {
             lessonId: lesson.id,
             title: lesson.title,
             quizCount: quizIds.length,
             passedStudents,
+            averageScore,
             percent: members.length
               ? Math.round((passedStudents / members.length) * 100)
               : 0,
@@ -191,7 +206,10 @@ export async function TeacherClassDetail({
           quiz progress cannot be calculated.
         </p>
       )}
-      <section className="stats-grid" aria-label="Class progress summary">
+      <section
+        className="my-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        aria-label="Class progress summary"
+      >
         <StatCard
           label="Students"
           value={members.length}
@@ -244,11 +262,10 @@ export async function TeacherClassDetail({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Joined</TableHead>
+                  <TableHead>Student</TableHead>
                   <TableHead>Chapters</TableHead>
                   <TableHead>Quizzes</TableHead>
+                  <TableHead>Score</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last quiz</TableHead>
                   <TableHead className="text-right">Action</TableHead>
@@ -257,11 +274,14 @@ export async function TeacherClassDetail({
               <TableBody>
                 {rows.map(({ member, quiz, latestQuiz }) => (
                   <TableRow key={member.student.id}>
-                    <TableCell className="font-medium">
-                      {member.student.name}
+                    <TableCell>
+                      <strong className="block text-sm">
+                        {member.student.name}
+                      </strong>
+                      <span className="muted text-xs">
+                        {member.student.email}
+                      </span>
                     </TableCell>
-                    <TableCell>{member.student.email}</TableCell>
-                    <TableCell>{dateLabel(member.joinedAt)}</TableCell>
                     <TableCell>
                       {quiz
                         ? `${quiz.passedLessons} / ${quiz.lessonsWithQuizzes}`
@@ -271,6 +291,18 @@ export async function TeacherClassDetail({
                       {quiz
                         ? `${quiz.passedQuizzes} / ${quiz.totalQuizzes}`
                         : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {quiz?.averageScorePercent != null ? (
+                        <div>
+                          <strong>{quiz.averageScorePercent}%</strong>
+                          <span className="form-hint block">
+                            best {quiz.bestScorePercent}%
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {quiz && quiz.lessonsWithQuizzes > 0 ? (
@@ -339,6 +371,7 @@ export async function TeacherClassDetail({
                 <TableHead>Chapter</TableHead>
                 <TableHead>Quizzes</TableHead>
                 <TableHead>Students passed</TableHead>
+                <TableHead>Avg score</TableHead>
                 <TableHead>Completion</TableHead>
               </TableRow>
             </TableHeader>
@@ -349,6 +382,11 @@ export async function TeacherClassDetail({
                   <TableCell>{chapter.quizCount}</TableCell>
                   <TableCell>
                     {chapter.passedStudents} / {members.length}
+                  </TableCell>
+                  <TableCell>
+                    {chapter.averageScore !== null
+                      ? `${chapter.averageScore}%`
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     <div className="min-w-28">

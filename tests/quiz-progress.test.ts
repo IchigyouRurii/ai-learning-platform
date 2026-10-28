@@ -40,13 +40,14 @@ describe("quiz progress", () => {
       calculateQuizProgress(course, [attempt(quizId, 2)], studentId)
         .passedQuizzes,
     ).toBe(0);
-    expect(
-      calculateQuizProgress(
-        course,
-        [attempt(quizId, 2), attempt(quizId, 3)],
-        studentId,
-      ).passedQuizzes,
-    ).toBe(1);
+    const best = calculateQuizProgress(
+      course,
+      [attempt(quizId, 2), attempt(quizId, 3)],
+      studentId,
+    );
+    expect(best.passedQuizzes).toBe(1);
+    expect(best.bestScorePercent).toBe(60);
+    expect(best.averageScorePercent).toBe(60);
     expect(
       calculateQuizProgress(course, [attempt(quizId, 5)], studentId).completed,
     ).toBe(true);
