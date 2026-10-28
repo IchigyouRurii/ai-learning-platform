@@ -19,7 +19,7 @@
 - 删除班级时，仓储在同一事务内先清理 `classroom_join_codes`、`course_assignments`、`classroom_members`，再删除 `classrooms`；`enrollments` 和学习记录保留。
 - 学习授权仍使用 `enrollments.direct_access=true`。班级创建/导入学生会写入默认 `direct_access=true` 的 enrollment；`direct_access=false` 的历史记录不授予访问。
 - `202610290002_quiz_scores.sql` 给 `submissions` 增加可空 `score` / `max_score`；只有两项都有值时计入测验统计。`202610290001_lesson_completions.sql` 保留学生个人章节完成。
-- 课程下架、成员移除、删除班级后，相关学习/讨论访问应按现有 SQL 条件失效。
+- 课程下架、删除班级后，相关学习/讨论访问按现有 SQL 条件失效。
 
 ## 合并时处理的冲突
 

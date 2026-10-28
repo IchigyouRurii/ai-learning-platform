@@ -300,8 +300,6 @@ export function createNeonClassroomRepository(
       }
     },
     async removeMember(actor, classId, studentId) {
-      // The course is a public cohort course. Removing class membership does not
-      // revoke the student's existing enrollment or learning records.
       const result = await pool.query(
         `delete from classroom_members m using classrooms c
          where m.class_id = $1 and m.student_id = $2
