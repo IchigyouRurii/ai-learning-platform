@@ -9,12 +9,6 @@ import {
   emptyInputSchema,
 } from "./common";
 import { courseSummarySchema } from "./courses";
-import {
-  classroomSchema,
-  classroomMemberSchema,
-  assignmentSchema,
-} from "./classrooms";
-
 export const userDirectoryEntrySchema = z.object({
   id: idSchema,
   name: z.string(),
@@ -38,8 +32,6 @@ export const adminOverviewSchema = z.object({
   courses: z.number().int().nonnegative(),
   publishedCourses: z.number().int().nonnegative(),
   withdrawnCourses: z.number().int().nonnegative(),
-  classrooms: z.number().int().nonnegative(),
-  archivedClassrooms: z.number().int().nonnegative(),
 });
 export const adminCourseEntrySchema = courseSummarySchema.extend({
   ownerName: z.string(),
@@ -47,68 +39,7 @@ export const adminCourseEntrySchema = courseSummarySchema.extend({
   moderationReason: z.string(),
   createdAt: timestampSchema,
 });
-export const adminClassroomEntrySchema = classroomSchema.extend({
-  archivedAt: timestampSchema.nullable(),
-  archivedByName: z.string().nullable(),
-});
-export const adminClassroomDetailSchema = z.object({
-  classroom: adminClassroomEntrySchema,
-  members: z.array(classroomMemberSchema),
-  assignments: z.array(assignmentSchema),
-});
 export const administrationFeatures = {
-  listClassrooms: feature(
-    z.strictObject({
-      ...pageInputSchema.shape,
-      search: z.string().max(200).optional(),
-      status: z.enum(["active", "archived"]).optional(),
-    }),
-    pageSchema(adminClassroomEntrySchema),
-    ["admin"],
-    "全平台班级元数据，不包含邀请码、私人课程或学生答题。",
-    "implemented",
-  ),
-  getClassroom: feature(
-    z.strictObject({ classId: idSchema }),
-    adminClassroomDetailSchema,
-    ["admin"],
-    "管理员查看班级、当前成员与未撤销分配的元数据；不返回学习答案或私有正文。",
-    "implemented",
-  ),
-  setClassroomStatus: feature(
-    z.strictObject({
-      classId: idSchema,
-      expectedStatus: z.enum(["active", "archived"]),
-      status: z.enum(["active", "archived"]),
-      reason: z.string().trim().min(1).max(2000),
-    }),
-    adminClassroomEntrySchema,
-    ["admin"],
-    "事务校验旧状态并归档/恢复，记录原因与审计；归档撤销邀请码并暂停班级授权，保留历史。",
-    "implemented",
-  ),
-  removeClassroomMember: feature(
-    z.strictObject({
-      classId: idSchema,
-      studentId: idSchema,
-      reason: z.string().trim().min(1).max(2000),
-    }),
-    z.object({ removed: z.boolean() }),
-    ["admin"],
-    "跨班级移除成员，撤销旧邀请码防止凭原码重新加入；保留历史，记审计。",
-    "implemented",
-  ),
-  removeClassroomAssignment: feature(
-    z.strictObject({
-      classId: idSchema,
-      assignmentId: idSchema,
-      reason: z.string().trim().min(1).max(2000),
-    }),
-    z.object({ removed: z.boolean() }),
-    ["admin"],
-    "校验分配属于指定班级，软撤销并记审计，保留历史。",
-    "implemented",
-  ),
   getOverview: feature(
     emptyInputSchema,
     adminOverviewSchema,
@@ -184,5 +115,3 @@ export type UserDirectoryEntry = z.infer<typeof userDirectoryEntrySchema>;
 export type ModerationRecord = z.infer<typeof moderationRecordSchema>;
 export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 export type AdminCourseEntry = z.infer<typeof adminCourseEntrySchema>;
-export type AdminClassroomEntry = z.infer<typeof adminClassroomEntrySchema>;
-export type AdminClassroomDetail = z.infer<typeof adminClassroomDetailSchema>;

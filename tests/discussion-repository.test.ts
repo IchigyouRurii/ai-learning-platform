@@ -247,7 +247,7 @@ describe("course-scoped discussion repository", () => {
     expect(filtered?.items[0].author.id).toBe(peer.id);
   });
 
-  it("requires an active learning grant, not a bare enrollment row", async () => {
+  it("requires direct course access, not a bare enrollment row", async () => {
     await postgres.pool.query(
       "update enrollments set direct_access = false where course_id = 'course-1' and student_id = $1",
       [peer.id],
@@ -261,36 +261,6 @@ describe("course-scoped discussion repository", () => {
         courseVersion: 1,
         message: "Should not be allowed without a real grant",
       }),
-    ).toBeNull();
-
-    await postgres.pool.query(
-      "insert into classrooms (id, teacher_id, name, description, course_id) values ('class-1', $1, 'Class', '', 'course-1')",
-      [teacher.id],
-    );
-    await postgres.pool.query(
-      "insert into classroom_members (class_id, student_id) values ('class-1', $1)",
-      [peer.id],
-    );
-    await postgres.pool.query(
-      "insert into course_assignments (id, class_id, course_id, course_version) values ('assignment-1', 'class-1', 'course-1', 1)",
-    );
-
-    expect(
-      await discussions.listThreads(peer, "course-1", { limit: 20 }),
-    ).not.toBeNull();
-    expect(
-      await discussions.insertQuestion(peer, {
-        courseId: "course-1",
-        courseVersion: 1,
-        message: "Allowed through an active class assignment",
-      }),
-    ).not.toBeNull();
-
-    await postgres.pool.query(
-      "update course_assignments set revoked_at = now() where id = 'assignment-1'",
-    );
-    expect(
-      await discussions.listThreads(peer, "course-1", { limit: 20 }),
     ).toBeNull();
   });
 });

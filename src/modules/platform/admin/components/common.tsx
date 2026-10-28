@@ -7,7 +7,7 @@ import styles from "../admin.module.css";
 export function AdminTabs({
   current,
 }: {
-  current: "overview" | "users" | "courses" | "classrooms";
+  current: "overview" | "users" | "courses";
 }) {
   return (
     <nav className={styles.tabs} aria-label="Administration sections">
@@ -16,7 +16,6 @@ export function AdminTabs({
           ["overview", "/admin", "Overview"],
           ["users", "/admin/users", "Users"],
           ["courses", "/admin/courses", "Courses"],
-          ["classrooms", "/admin/classes", "Classes"],
         ] as const
       ).map(([key, href, label]) => (
         <Link

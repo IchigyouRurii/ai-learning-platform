@@ -87,12 +87,11 @@ export function createLocalPlatformRepository(
         ),
       };
     },
-    async findCourse(id, version) {
+    async findCourse(id) {
       const course = (await store.read()).courses.find(
         (item) => item.id === id,
       );
-      if (!course || (version !== undefined && course.version !== version))
-        return null;
+      if (!course) return null;
       return course.status === "published" ? publishedView(course) : course;
     },
     async getCourseDocument(id) {
@@ -101,16 +100,8 @@ export function createLocalPlatformRepository(
       );
       return course ? toDocument(course) : null;
     },
-    async isEnrolled(courseId, studentId, version) {
-      const state = await store.read();
-      if (
-        version !== undefined &&
-        !state.courses.some(
-          (course) => course.id === courseId && course.version === version,
-        )
-      )
-        return false;
-      return state.enrollments.some(
+    async isEnrolled(courseId, studentId) {
+      return (await store.read()).enrollments.some(
         (item) => item.courseId === courseId && item.studentId === studentId,
       );
     },

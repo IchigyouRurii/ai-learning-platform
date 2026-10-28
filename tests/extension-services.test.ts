@@ -65,10 +65,6 @@ const key = "d7b59eb2-2266-4f8b-a0c3-e31b994f24bd";
 const inputs = {
   classrooms: {
     create: { name: "一班" },
-    get: { classId: "class" },
-    update: { classId: "class", name: "新班名" },
-    listAssignableCourses: { classId: "class" },
-    removeAssignment: { classId: "class", assignmentId: "assignment" },
     listMine: {},
     listMembers: { classId: "class" },
     inviteStudents: { classId: "class", emails: ["student@example.com"] },
@@ -162,24 +158,6 @@ const inputs = {
     resolve: { questionId: "question" },
   },
   administration: {
-    listClassrooms: {},
-    getClassroom: { classId: "class" },
-    setClassroomStatus: {
-      classId: "class",
-      expectedStatus: "active",
-      status: "archived",
-      reason: "Review",
-    },
-    removeClassroomMember: {
-      classId: "class",
-      studentId: "student",
-      reason: "Review",
-    },
-    removeClassroomAssignment: {
-      classId: "class",
-      assignmentId: "assignment",
-      reason: "Review",
-    },
     getOverview: {},
     listUsers: {},
     changeRole: { userId: "user", expectedRole: "student", role: "teacher" },
@@ -246,12 +224,11 @@ describe("reserved service boundaries", () => {
     expect(
       capabilities.filter((item) => item.status === "reserved"),
     ).toHaveLength(reservedCount);
-    expect(implemented).toHaveLength(28);
+    expect(implemented).toHaveLength(10);
     expect(
       implemented.every(
         (item) =>
           item.operation.startsWith("administration.") ||
-          item.operation.startsWith("classrooms.") ||
           item.operation.startsWith("discussions."),
       ),
     ).toBe(true);

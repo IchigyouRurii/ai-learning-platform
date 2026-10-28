@@ -20,14 +20,9 @@ export async function getWorkspace(actor: User) {
   return getRepository().getWorkspace(actor);
 }
 
-async function requireCourse(id: string, version?: number) {
-  const course = await getRepository().findCourse(id, version);
-  if (!course)
-    throw new Error(
-      version === undefined
-        ? "Course not found."
-        : "This course version was not found. Refresh and try again.",
-    );
+async function requireCourse(id: string) {
+  const course = await getRepository().findCourse(id);
+  if (!course) throw new Error("Course not found.");
   return course;
 }
 
@@ -39,7 +34,7 @@ async function requireLearningAccess(actor: User, course: Course) {
     );
   if (course.status !== "published")
     throw new Error("This course has not been published.");
-  if (!(await getRepository().isEnrolled(course.id, actor.id, course.version)))
+  if (!(await getRepository().isEnrolled(course.id, actor.id)))
     throw new Error("Please enroll in this course first.");
 }
 
@@ -138,23 +133,12 @@ export async function enrollCourse(actor: User, id: string) {
   await getRepository().enroll(id, actor.id);
 }
 
-export async function getAssignedLearningCourse(
-  actor: User,
-  courseId: string,
-  version: number,
-) {
-  const course = await requireCourse(courseId, version);
-  await requireLearningAccess(actor, course);
-  return course;
-}
-
 export async function getLearningContext(
   actor: User,
   courseId: string,
   activityId: string,
-  version?: number,
 ) {
-  const course = await requireCourse(courseId, version);
+  const course = await requireCourse(courseId);
   await requireLearningAccess(actor, course);
   const activity = getActivities(course).find((item) => item.id === activityId);
   if (!activity)
@@ -166,7 +150,7 @@ export async function recordSubmission(
   actor: User,
   input: Omit<Submission, "id" | "studentId" | "createdAt">,
 ) {
-  const course = await requireCourse(input.courseId, input.courseVersion);
+  const course = await requireCourse(input.courseId);
   await requireLearningAccess(actor, course);
   if (
     course.version !== input.courseVersion ||

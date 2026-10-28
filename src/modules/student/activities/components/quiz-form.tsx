@@ -57,13 +57,11 @@ function QuestionCard({
 
 export function QuizForm({
   courseId,
-  courseVersion,
   activity,
   latest,
   history = [],
 }: {
   courseId: string;
-  courseVersion?: number;
   activity: SafeActivity;
   latest?: Submission;
   history?: Submission[];
@@ -135,7 +133,6 @@ export function QuizForm({
           startTransition(async () => {
             const response = await submitQuizAction({
               courseId,
-              courseVersion,
               activityId: activity.id,
               answers: questions.map((question) => ({
                 questionId: question.id,

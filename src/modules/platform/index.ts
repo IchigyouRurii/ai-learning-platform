@@ -3,9 +3,6 @@ export { getCurrentUser, getSessionUser, DEMO_USERS } from "./server/identity";
 export {
   changeUserRoleAction,
   withdrawCourseAction,
-  setClassroomStatusAction,
-  adminRemoveClassroomMemberAction,
-  adminRemoveClassroomAssignmentAction,
 } from "./server/admin-actions";
 export {
   getWorkspace,
@@ -13,7 +10,6 @@ export {
   publishCourse,
   enrollCourse,
   getLearningContext,
-  getAssignedLearningCourse,
   recordSubmission,
   addTeacherFeedback,
   calculateProgress,

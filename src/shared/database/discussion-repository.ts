@@ -124,14 +124,7 @@ export function createDiscussionRepository(pool: Pool): DiscussionRepository {
   return {
     async insertQuestion(actor, input) {
       if (actor.role !== "student") return null;
-      if (
-        !(await platform.isEnrolled(
-          input.courseId,
-          actor.id,
-          input.courseVersion,
-        ))
-      )
-        return null;
+      if (!(await platform.isEnrolled(input.courseId, actor.id))) return null;
       const id = randomUUID();
       const result = await pool.query<QuestionRow>(
         `with inserted as (
@@ -276,11 +269,7 @@ export function createDiscussionRepository(pool: Pool): DiscussionRepository {
         );
         if (!owner.rowCount) return null;
       } else if (
-        !(await platform.isEnrolled(
-          targetQuestion.courseId,
-          actor.id,
-          targetQuestion.courseVersion,
-        ))
+        !(await platform.isEnrolled(targetQuestion.courseId, actor.id))
       )
         return null;
       const id = randomUUID();

@@ -12,8 +12,6 @@ import { getMigrations } from "better-auth/db/migration";
 import { createAuth } from "@/modules/platform/server/auth-config";
 import { createAdministrationService } from "@/modules/platform/server/administration-service";
 import { createAdministrationRepository } from "@/shared/database/administration-repository";
-import { createClassroomRepository } from "@/shared/database/classroom-repository";
-import { createClassroomService } from "@/modules/platform/server/classroom-service";
 import { createNeonRepository } from "@/shared/database/neon-repository";
 import { createSeedState } from "@/shared/database/seed";
 import type { Course, Submission, User } from "@/shared/contracts";
@@ -343,6 +341,40 @@ describe("user directory and role changes", () => {
 });
 
 describe("teaching-course moderation", () => {
+  it("retains historical enrollment without granting access until the student directly enrolls", async () => {
+    const course = await teachingCourse();
+    await postgres.pool.query(
+      "insert into enrollments (course_id, student_id, direct_access) values ($1, $2, false)",
+      [course.id, student.id],
+    );
+    expect(await courses.isEnrolled(course.id, student.id)).toBe(false);
+    expect((await courses.getWorkspace(student)).enrollments).toEqual([]);
+    await expect(
+      getLearningContext(student, course.id, "ai-coding-r1"),
+    ).rejects.toThrow("enroll");
+    await expect(courses.insertSubmission(submission(course))).rejects.toThrow(
+      "changed",
+    );
+    await expect(
+      courses.insertFeedback({
+        id: "history-only-feedback",
+        courseId: course.id,
+        studentId: student.id,
+        teacherId: teacher.id,
+        message: "A historical row does not grant teaching access.",
+        createdAt: new Date().toISOString(),
+      }),
+    ).rejects.toThrow();
+    expect(
+      (await postgres.pool.query("select * from enrollments")).rows,
+    ).toHaveLength(1);
+
+    await enrollCourse(student, course.id);
+    expect(await courses.isEnrolled(course.id, student.id)).toBe(true);
+    expect((await courses.getWorkspace(student)).enrollments).toHaveLength(1);
+    await courses.insertSubmission(submission(course));
+  });
+
   it("lists teaching metadata without personal courses, lesson bodies or quiz keys", async () => {
     await teachingCourse();
     await courses.insertCourse({
@@ -464,433 +496,5 @@ describe("teaching-course moderation", () => {
         )
       ).rows,
     ).toHaveLength(2);
-  });
-});
-
-async function classroomFixture() {
-  const classes = createClassroomRepository(postgres.pool);
-  const classService = createClassroomService(() => classes);
-  const classroom = await classes.create(teacher, {
-    name: "Engineering Class",
-    description: "Course plans",
-  });
-  const course = await teachingCourse();
-  await classes.importExistingStudents(teacher, classroom.id, [
-    `${student.id}@example.test`,
-  ]);
-  const assignment = await classes.assignCourse(teacher, {
-    classId: classroom.id,
-    courseId: course.id,
-    courseVersion: 1,
-  });
-  const code = await classService.createJoinCode(teacher, {
-    classId: classroom.id,
-  });
-  if (!code.ok) throw new Error(code.error);
-  return {
-    classes,
-    classService,
-    classroom,
-    course,
-    assignment,
-    code: code.data.code,
-  };
-}
-const archiveInput = (classId: string) => ({
-  classId,
-  expectedStatus: "active" as const,
-  status: "archived" as const,
-  reason: "Class activity review.",
-});
-
-describe("administrator classroom management", () => {
-  it("denies ordinary, forged and stale admins and rejects injected authority before mutation", async () => {
-    const provider = vi.fn(() => repo);
-    const guarded = createAdministrationService(provider);
-    expect(await guarded.listClassrooms(null, {})).toMatchObject({
-      code: "AUTH_REQUIRED",
-    });
-    expect(await guarded.listClassrooms(teacher, {})).toMatchObject({
-      code: "FORBIDDEN",
-    });
-    expect(
-      await guarded.setClassroomStatus(student, archiveInput("class")),
-    ).toMatchObject({ code: "FORBIDDEN" });
-    expect(
-      await guarded.setClassroomStatus(admin, {
-        ...archiveInput("class"),
-        actorId: "forged",
-      } as never),
-    ).toMatchObject({ code: "INVALID_INPUT" });
-    expect(
-      await guarded.setClassroomStatus(admin, {
-        ...archiveInput("class"),
-        reason: " ",
-      }),
-    ).toMatchObject({ code: "INVALID_INPUT" });
-    expect(provider).not.toHaveBeenCalled();
-    await expect(
-      repo.listClassrooms({ ...teacher, role: "admin" }, { limit: 20 }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await postgres.pool.query('update "user" set role = $2 where id = $1', [
-      secondAdmin.id,
-      "student",
-    ]);
-    expect(
-      await service.getClassroom(secondAdmin, { classId: "class" }),
-    ).toMatchObject({ code: "FORBIDDEN" });
-  });
-  it("lists all classes, filters literal searches and status, paginates tied timestamps and adds overview counts", async () => {
-    const { classes, classroom } = await classroomFixture();
-    const second = await classes.create(teacher, {
-      name: "Mathematics",
-      description: "",
-    });
-    await postgres.pool.query(
-      "update classrooms set created_at = '2026-10-27T01:00:00.123456Z'",
-    );
-    expect(
-      (await repo.listClassrooms(admin, { limit: 20 })).items,
-    ).toHaveLength(2);
-    expect((await classes.listMine(other, { limit: 20 })).items).toHaveLength(
-      0,
-    );
-    expect(
-      (
-        await repo.listClassrooms(admin, { limit: 20, search: "Engineering" })
-      ).items.map((item) => item.id),
-    ).toEqual([classroom.id]);
-    expect(
-      (await repo.listClassrooms(admin, { limit: 20, search: teacher.name }))
-        .items,
-    ).toHaveLength(2);
-    expect(
-      (await repo.listClassrooms(admin, { limit: 20, search: "%" })).items,
-    ).toHaveLength(0);
-    const first = await repo.listClassrooms(admin, { limit: 1 });
-    const next = await repo.listClassrooms(admin, {
-      limit: 1,
-      cursor: first.nextCursor!,
-    });
-    expect(
-      new Set([...first.items, ...next.items].map((item) => item.id)),
-    ).toEqual(new Set([classroom.id, second.id]));
-    expect(
-      await service.listClassrooms(admin, { cursor: "invalid" }),
-    ).toMatchObject({ code: "INVALID_INPUT" });
-    await repo.setClassroomStatus(admin, archiveInput(classroom.id));
-    expect(
-      (
-        await repo.listClassrooms(admin, { limit: 20, status: "active" })
-      ).items.map((item) => item.id),
-    ).toEqual([second.id]);
-    expect(
-      (await repo.listClassrooms(admin, { limit: 20, status: "archived" }))
-        .items[0],
-    ).toMatchObject({ id: classroom.id, archivedByName: admin.name });
-    expect(await repo.getOverview(admin)).toMatchObject({
-      classrooms: 2,
-      archivedClassrooms: 1,
-    });
-  });
-  it("projects only members and assignment metadata, never join codes, answers, email or course bodies", async () => {
-    const { classroom, code, course } = await classroomFixture();
-    await courses.insertSubmission(submission(course));
-    const detail = await service.getClassroom(admin, { classId: classroom.id });
-    expect(detail).toMatchObject({
-      ok: true,
-      data: {
-        classroom: {
-          teacherId: teacher.id,
-          memberCount: 1,
-          assignmentCount: 1,
-        },
-        members: [{ student: { id: student.id } }],
-        assignments: [{ courseVersion: 1 }],
-      },
-    });
-    const serialized = JSON.stringify(detail);
-    for (const privateField of [
-      code,
-      "token_hash",
-      "correctOptionIds",
-      "draft_content",
-      "blocks",
-      submission(course).answer,
-      `${student.id}@example.test`,
-    ])
-      expect(serialized).not.toContain(privateField);
-    expect(
-      await service.getClassroom(admin, { classId: "unknown" }),
-    ).toMatchObject({ code: "NOT_FOUND" });
-  });
-  it("archives atomically, revokes joining and class-only learning, freezes teacher writes and retains history", async () => {
-    const { classes, classService, classroom, code, course } =
-      await classroomFixture();
-    await courses.insertSubmission(submission(course));
-    await courses.insertFeedback({
-      id: "feedback-1",
-      courseId: course.id,
-      studentId: student.id,
-      teacherId: teacher.id,
-      message: "Keep learning.",
-      createdAt: new Date().toISOString(),
-    });
-    expect(
-      await service.setClassroomStatus(admin, archiveInput(classroom.id)),
-    ).toMatchObject({
-      ok: true,
-      data: { status: "archived", archiveReason: "Class activity review." },
-    });
-    expect(await classService.joinByCode(other, { code })).toMatchObject({
-      code: "NOT_FOUND",
-    });
-    expect(
-      await classService.createJoinCode(teacher, { classId: classroom.id }),
-    ).toMatchObject({ code: "CONFLICT" });
-    expect(
-      await classService.update(teacher, {
-        classId: classroom.id,
-        name: "Changed",
-      }),
-    ).toMatchObject({ code: "CONFLICT" });
-    expect(
-      await classService.importStudents(teacher, {
-        classId: classroom.id,
-        emails: [`${other.id}@example.test`],
-      }),
-    ).toMatchObject({ code: "CONFLICT" });
-    expect(
-      await classService.assignCourse(teacher, {
-        classId: classroom.id,
-        courseId: course.id,
-        courseVersion: 1,
-      }),
-    ).toMatchObject({ code: "CONFLICT" });
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(false);
-    await expect(
-      getLearningContext(student, course.id, "ai-coding-r1", 1),
-    ).rejects.toThrow("enroll");
-    await expect(
-      courses.insertSubmission({ ...submission(course), id: "new-attempt" }),
-    ).rejects.toThrow("enrollment");
-    expect((await courses.getWorkspace(student)).enrollments).toHaveLength(0);
-    expect((await classes.findForActor(student, classroom.id))?.status).toBe(
-      "archived",
-    );
-    expect(
-      (await classes.listAssignments(student, { limit: 20 })).items[0],
-    ).toMatchObject({ available: false, classArchived: true });
-    expect(await classes.listMembers(teacher, classroom.id)).toHaveLength(1);
-    expect(await classes.listAssignableCourses(teacher, classroom.id)).toEqual(
-      [],
-    );
-    expect((await courses.getWorkspace(student)).submissions).toHaveLength(1);
-    expect((await courses.getWorkspace(student)).feedback).toHaveLength(1);
-    expect(
-      (
-        await postgres.pool.query(
-          "select action, summary from admin_audit_events",
-        )
-      ).rows,
-    ).toEqual([
-      {
-        action: "class.archived",
-        summary: {
-          from: "active",
-          to: "archived",
-          reason: "Class activity review.",
-        },
-      },
-    ]);
-  });
-  it("rejects stale state changes and restores class grants without resurrecting an old join code", async () => {
-    const { classes, classService, classroom, code, course } =
-      await classroomFixture();
-    await repo.setClassroomStatus(admin, archiveInput(classroom.id));
-    expect(
-      await service.setClassroomStatus(admin, archiveInput(classroom.id)),
-    ).toMatchObject({ code: "CONFLICT" });
-    expect(
-      await service.setClassroomStatus(admin, {
-        classId: classroom.id,
-        expectedStatus: "archived",
-        status: "active",
-        reason: "Review completed.",
-      }),
-    ).toMatchObject({
-      ok: true,
-      data: {
-        status: "active",
-        archiveReason: "",
-        archivedAt: null,
-        archivedByName: null,
-      },
-    });
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(true);
-    expect(
-      (await classes.listAssignments(student, { limit: 20 })).items[0]
-        .available,
-    ).toBe(true);
-    expect(await classService.joinByCode(other, { code })).toMatchObject({
-      code: "NOT_FOUND",
-    });
-    expect(
-      (
-        await postgres.pool.query(
-          "select action from admin_audit_events order by created_at",
-        )
-      ).rows.map((row) => row.action),
-    ).toEqual(["class.archived", "class.restored"]);
-  });
-  it("never bypasses course withdrawal when restoring a class", async () => {
-    const { classes, classroom, course } = await classroomFixture();
-    await repo.setClassroomStatus(admin, archiveInput(classroom.id));
-    await repo.withdrawCourseAndAudit(admin, course.id, "Course review.");
-    await repo.setClassroomStatus(admin, {
-      classId: classroom.id,
-      expectedStatus: "archived",
-      status: "active",
-      reason: "Class review complete.",
-    });
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(false);
-    expect(
-      (await classes.listAssignments(student, { limit: 20 })).items[0],
-    ).toMatchObject({ available: false, classArchived: false });
-    await expect(courses.insertSubmission(submission(course))).rejects.toThrow(
-      "enrollment",
-    );
-  });
-  it("preserves independent enrollment and grants from other active classes", async () => {
-    const { classes, classroom, course } = await classroomFixture();
-    const second = await classes.create(teacher, {
-      name: "Second class",
-      description: "",
-    });
-    await classes.importExistingStudents(teacher, second.id, [
-      `${student.id}@example.test`,
-    ]);
-    await classes.assignCourse(teacher, {
-      classId: second.id,
-      courseId: course.id,
-      courseVersion: 1,
-    });
-    await classes.importExistingStudents(teacher, classroom.id, [
-      `${other.id}@example.test`,
-    ]);
-    await courses.enroll(course.id, other.id);
-    await repo.setClassroomStatus(admin, archiveInput(classroom.id));
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(true);
-    expect(await courses.isEnrolled(course.id, other.id, 1)).toBe(true);
-    await repo.setClassroomStatus(admin, archiveInput(second.id));
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(false);
-    expect(await courses.isEnrolled(course.id, other.id, 1)).toBe(true);
-  });
-  it("removes a member with audit and code revocation while retaining learning records", async () => {
-    const { classes, classService, classroom, code, course } =
-      await classroomFixture();
-    await courses.insertSubmission(submission(course));
-    expect(
-      await service.removeClassroomMember(admin, {
-        classId: classroom.id,
-        studentId: student.id,
-        reason: "Membership correction.",
-      }),
-    ).toEqual({ ok: true, data: { removed: true } });
-    expect(
-      await repo.removeClassroomMember(admin, {
-        classId: classroom.id,
-        studentId: student.id,
-        reason: "Repeat.",
-      }),
-    ).toBe(false);
-    expect(await classes.findForActor(student, classroom.id)).toBeNull();
-    expect(await classService.joinByCode(student, { code })).toMatchObject({
-      code: "NOT_FOUND",
-    });
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(false);
-    await expect(
-      courses.insertSubmission({ ...submission(course), id: "new" }),
-    ).rejects.toThrow("enrollment");
-    expect((await courses.getWorkspace(student)).submissions).toHaveLength(1);
-    expect(
-      (await postgres.pool.query("select action from admin_audit_events")).rows,
-    ).toEqual([{ action: "class.member_removed" }]);
-  });
-  it("only revokes assignments belonging to the selected class and keeps snapshots and attempts", async () => {
-    const { classes, classroom, course, assignment } = await classroomFixture();
-    const second = await classes.create(teacher, {
-      name: "Other class",
-      description: "",
-    });
-    await courses.insertSubmission(submission(course));
-    expect(
-      await repo.removeClassroomAssignment(admin, {
-        classId: second.id,
-        assignmentId: assignment.id,
-        reason: "Wrong class",
-      }),
-    ).toBe(false);
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(true);
-    expect(
-      await service.removeClassroomAssignment(admin, {
-        classId: classroom.id,
-        assignmentId: assignment.id,
-        reason: "Course plan correction.",
-      }),
-    ).toEqual({ ok: true, data: { removed: true } });
-    expect(
-      await repo.removeClassroomAssignment(admin, {
-        classId: classroom.id,
-        assignmentId: assignment.id,
-        reason: "Repeat",
-      }),
-    ).toBe(false);
-    expect(await courses.isEnrolled(course.id, student.id, 1)).toBe(false);
-    expect((await courses.getWorkspace(student)).submissions).toHaveLength(1);
-    expect(
-      (await postgres.pool.query("select * from course_revisions")).rows,
-    ).toHaveLength(1);
-    expect(
-      (await postgres.pool.query("select action from admin_audit_events")).rows,
-    ).toEqual([{ action: "class.assignment_removed" }]);
-  });
-  it("rolls back status, code deletion, membership and assignment changes if audit writing fails", async () => {
-    const { classroom, assignment } = await classroomFixture();
-    await postgres.database
-      .exec(`create function reject_class_audit() returns trigger language plpgsql as $$ begin raise exception 'test audit failure'; end; $$;
-      create trigger reject_class_audit before insert on admin_audit_events for each row execute function reject_class_audit();`);
-    try {
-      const operations = [
-        () => service.setClassroomStatus(admin, archiveInput(classroom.id)),
-        () =>
-          service.removeClassroomMember(admin, {
-            classId: classroom.id,
-            studentId: student.id,
-            reason: "Review",
-          }),
-        () =>
-          service.removeClassroomAssignment(admin, {
-            classId: classroom.id,
-            assignmentId: assignment.id,
-            reason: "Review",
-          }),
-      ];
-      for (const operation of operations) {
-        expect(await operation()).toMatchObject({ code: "INTERNAL_ERROR" });
-        const detail = await repo.getClassroom(admin, classroom.id);
-        expect(detail.classroom.status).toBe("active");
-        expect(detail.members).toHaveLength(1);
-        expect(detail.assignments).toHaveLength(1);
-        expect(
-          (await postgres.pool.query("select * from classroom_join_codes"))
-            .rows,
-        ).toHaveLength(1);
-      }
-    } finally {
-      await postgres.database.exec(
-        "drop trigger reject_class_audit on admin_audit_events; drop function reject_class_audit()",
-      );
-    }
   });
 });

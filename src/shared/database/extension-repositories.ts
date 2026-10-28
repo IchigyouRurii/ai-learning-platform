@@ -1,13 +1,10 @@
 import type {
   ActivityAttempt,
   AdminOverview,
-  AdminClassroomEntry,
-  AdminClassroomDetail,
   AdminCourseEntry,
   ActivityResponse,
   AuthoringDraft,
   Classroom,
-  AssignableCourse,
   ClassroomInvitation,
   ClassroomMember,
   CourseAssignment,
@@ -37,7 +34,7 @@ export type PageInput = z.output<typeof pageInputSchema>;
 export type Page<T> = { items: T[]; nextCursor: string | null };
 export type CourseVersionRef = { courseId: string; courseVersion: number };
 
-// Domain ports: administration/classrooms have Neon implementations; other
+// Administration has a Neon implementation; classroom and other extension
 // adapters remain reserved. Every query
 // is actor-scoped; writes must repeat resource and version predicates atomically.
 // Public services handle input parsing/AI orchestration. These ports are only
@@ -48,19 +45,6 @@ export interface ClassroomRepository {
     input: { name: string; description: string },
   ): Promise<Classroom>;
   findForActor(actor: User, classId: string): Promise<Classroom | null>;
-  update(
-    actor: User,
-    input: { classId: string; name: string; description: string },
-  ): Promise<Classroom>;
-  listAssignableCourses(
-    actor: User,
-    classId: string,
-  ): Promise<AssignableCourse[]>;
-  removeAssignment(
-    actor: User,
-    classId: string,
-    assignmentId: string,
-  ): Promise<boolean>;
   listMine(actor: User, page: PageInput): Promise<Page<Classroom>>;
   listMembers(actor: User, classId: string): Promise<ClassroomMember[]>;
   insertInvitations(
@@ -259,28 +243,6 @@ export interface MaterialRepository {
 
 export interface AdministrationRepository {
   getOverview(actor: User): Promise<AdminOverview>;
-  listClassrooms(
-    actor: User,
-    page: PageInput & { search?: string; status?: "active" | "archived" },
-  ): Promise<Page<AdminClassroomEntry>>;
-  getClassroom(actor: User, classId: string): Promise<AdminClassroomDetail>;
-  setClassroomStatus(
-    actor: User,
-    input: {
-      classId: string;
-      expectedStatus: "active" | "archived";
-      status: "active" | "archived";
-      reason: string;
-    },
-  ): Promise<AdminClassroomEntry>;
-  removeClassroomMember(
-    actor: User,
-    input: { classId: string; studentId: string; reason: string },
-  ): Promise<boolean>;
-  removeClassroomAssignment(
-    actor: User,
-    input: { classId: string; assignmentId: string; reason: string },
-  ): Promise<boolean>;
   listUsers(
     actor: User,
     page: PageInput & { search?: string; role?: Role },

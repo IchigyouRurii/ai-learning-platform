@@ -5,7 +5,6 @@ import {
   calculateProgress,
   getCurrentUser,
   getWorkspace,
-  getAssignedLearningCourse,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { toSafeActivity } from "@/shared/contracts";
@@ -15,39 +14,13 @@ import { ActivityForm } from "../../activities/components/activity-form";
 import { EnrollButton } from "../../activities/components/enroll-button";
 import { QuizForm } from "../../activities/components/quiz-form";
 
-export async function StudentCourseDetail({
-  id,
-  version,
-}: {
-  id: string;
-  version?: number;
-}) {
+export async function StudentCourseDetail({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
   const workspace = await getWorkspace(user);
-  let course = workspace.courses.find((item) => item.id === id);
-  if (version !== undefined) {
-    try {
-      course = await getAssignedLearningCourse(user, id, version);
-    } catch {
-      return (
-        <section className="panel">
-          <h1>Course unavailable</h1>
-          <p className="muted">
-            You no longer have access to this version, or the course has been
-            withdrawn.
-          </p>
-          <Link className="text-link" href="/student/classes">
-            Back to my classes →
-          </Link>
-        </section>
-      );
-    }
-  }
+  const course = workspace.courses.find((item) => item.id === id);
   if (!course) notFound();
-  const enrolled =
-    version !== undefined ||
-    workspace.enrollments.some((item) => item.courseId === id);
+  const enrolled = workspace.enrollments.some((item) => item.courseId === id);
   const progress = calculateProgress(course, workspace.submissions, user.id);
   return (
     <>
@@ -71,15 +44,6 @@ export async function StudentCourseDetail({
           ) : undefined
         }
       />
-      {version !== undefined && (
-        <p className="panel">
-          Class assignment · Version {course.version}. Your activities and
-          records stay attached to this version.{" "}
-          <Link className="text-link" href="/student/classes">
-            My classes →
-          </Link>
-        </p>
-      )}
       <div className="detail-grid">
         <div>
           {!enrolled ? (
@@ -128,7 +92,6 @@ export async function StudentCourseDetail({
                     <ActivityForm
                       key={block.id}
                       courseId={course.id}
-                      courseVersion={course.version}
                       activity={block.activity}
                       latest={latest}
                       history={attempts}
@@ -138,7 +101,6 @@ export async function StudentCourseDetail({
                     <QuizForm
                       key={block.id}
                       courseId={course.id}
-                      courseVersion={course.version}
                       activity={toSafeActivity(block.activity)}
                       latest={latest}
                       history={attempts}
