@@ -22,6 +22,7 @@ import type {
   QuestionReply,
   QuestionThread,
   RoleplaySession,
+  StudentDirectoryEntry,
   UserDirectoryEntry,
   GenerationRequest,
   Role,
@@ -33,6 +34,11 @@ import type { pageInputSchema } from "@/shared/contracts/features/common";
 export type PageInput = z.output<typeof pageInputSchema>;
 export type Page<T> = { items: T[]; nextCursor: string | null };
 export type CourseVersionRef = { courseId: string; courseVersion: number };
+export type StudentDirectoryPageInput = {
+  search: string;
+  limit: number;
+  cursor?: string;
+};
 
 // Administration has a Neon implementation; classroom and other extension
 // adapters remain reserved. Every query
@@ -42,11 +48,21 @@ export type CourseVersionRef = { courseId: string; courseVersion: number };
 export interface ClassroomRepository {
   create(
     actor: User,
-    input: { name: string; description: string },
-  ): Promise<Classroom>;
+    input: {
+      name: string;
+      description: string;
+      courseId: string;
+      studentIds: string[];
+    },
+  ): Promise<Classroom | null>;
   findForActor(actor: User, classId: string): Promise<Classroom | null>;
+  deleteClass(actor: User, classId: string): Promise<boolean>;
   listMine(actor: User, page: PageInput): Promise<Page<Classroom>>;
   listMembers(actor: User, classId: string): Promise<ClassroomMember[]>;
+  listStudents(
+    actor: User,
+    page: StudentDirectoryPageInput,
+  ): Promise<Page<StudentDirectoryEntry>>;
   insertInvitations(
     actor: User,
     classId: string,
@@ -79,6 +95,20 @@ export interface ClassroomRepository {
     page: PageInput & { classId?: string },
   ): Promise<Page<CourseAssignment>>;
 }
+
+// Operations currently backed by a real adapter. The remaining classroom ports
+// (invitations, join codes, course assignments) stay reserved until implemented.
+export type ClassroomRosterRepository = Pick<
+  ClassroomRepository,
+  | "create"
+  | "findForActor"
+  | "deleteClass"
+  | "listMine"
+  | "listMembers"
+  | "listStudents"
+  | "importExistingStudents"
+  | "removeMember"
+>;
 
 export interface CourseAuthoringRepository {
   listCatalog(

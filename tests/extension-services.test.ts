@@ -7,8 +7,15 @@ import type {
 } from "@/shared/contracts";
 import { createSeedState } from "@/shared/database/seed";
 
-const external = vi.hoisted(() => ({ database: vi.fn(), ai: vi.fn() }));
-vi.mock("@/shared/database", () => ({ getRepository: external.database }));
+const external = vi.hoisted(() => ({
+  database: vi.fn(),
+  classroom: vi.fn(),
+  ai: vi.fn(),
+}));
+vi.mock("@/shared/database", () => ({
+  getRepository: external.database,
+  getClassroomRepository: external.classroom,
+}));
 vi.mock("@/shared/ai/client", () => ({ complete: external.ai }));
 import {
   platformExtensions,
@@ -64,9 +71,12 @@ const generation = { topic: "需求分析", audience: "初学者", goals: "说�
 const key = "d7b59eb2-2266-4f8b-a0c3-e31b994f24bd";
 const inputs = {
   classrooms: {
-    create: { name: "一班" },
+    create: { name: "一班", courseId: "course", studentIds: ["student"] },
+    get: { classId: "class" },
+    deleteClass: { classId: "class" },
     listMine: {},
     listMembers: { classId: "class" },
+    listStudents: {},
     inviteStudents: { classId: "class", emails: ["student@example.com"] },
     importStudents: { classId: "class", emails: ["student@example.com"] },
     acceptInvitation: { token: "a".repeat(32) },
@@ -224,11 +234,12 @@ describe("reserved service boundaries", () => {
     expect(
       capabilities.filter((item) => item.status === "reserved"),
     ).toHaveLength(reservedCount);
-    expect(implemented).toHaveLength(10);
+    expect(implemented).toHaveLength(18);
     expect(
       implemented.every(
         (item) =>
           item.operation.startsWith("administration.") ||
+          item.operation.startsWith("classrooms.") ||
           item.operation.startsWith("discussions."),
       ),
     ).toBe(true);
@@ -239,11 +250,14 @@ describe("reserved service boundaries", () => {
     expect(external.database).not.toHaveBeenCalled();
     expect(external.ai).not.toHaveBeenCalled();
   });
-  it("rejects invalid input and authority injection before returning a reserved result", async () => {
+  it("rejects invalid input and authority injection before resolving an operation", async () => {
     expect(
-      await platformExtensions.classrooms.create(actor, { name: "" }),
+      await platformExtensions.classrooms.create(actor, {
+        name: "",
+        courseId: "course",
+      }),
     ).toMatchObject({ ok: false, code: "INVALID_INPUT" });
-    const forged = { name: "一班", teacherId: "other" };
+    const forged = { name: "一班", courseId: "course", teacherId: "other" };
     expect(
       await platformExtensions.classrooms.create(actor, forged),
     ).toMatchObject({ ok: false, code: "INVALID_INPUT" });

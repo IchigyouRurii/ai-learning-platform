@@ -12,11 +12,11 @@ CourseDraft 继续用于原有文字/开放回答流程；新 AuthoringDraft 通
 
 | 领域                               | 计划表或变更                                         | 关键字段与约束                                                                                                                                                                 |
 | ---------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 班级（结构保留，功能待接入）       | classrooms                                           | id、teacher_id、name、description、created_at、status(active/archived)、archive_reason、archived_by、archived_at；teacher/管理员外键 user                                      |
-| 班级成员（结构保留，功能待接入）   | classroom_members                                    | (class_id, student_id) 主键、joined_at；只允许学生；班级拥有者查询名单                                                                                                         |
-| 班级邀请码（结构保留，功能待接入） | classroom_join_codes / classroom_join_attempts       | class_id 主键、token_hash UNIQUE、expires_at；更换即替换旧码，仅保存哈希；join_attempts 持久限制尝试次数                                                                       |
+| 班级（协作者实现已接入）       | classrooms                                           | id、teacher_id、name、description、created_at、status(active/archived)、archive_reason、archived_by、archived_at；teacher/管理员外键 user                                      |
+| 班级成员（协作者实现已接入）   | classroom_members                                    | (class_id, student_id) 主键、joined_at；只允许学生；班级拥有者查询名单                                                                                                         |
+| 班级邀请码（协作者实现已接入） | classroom_join_codes / classroom_join_attempts       | class_id 主键、token_hash UNIQUE、expires_at；更换即替换旧码，仅保存哈希；join_attempts 持久限制尝试次数                                                                       |
 | 邮箱邀请                           | classroom_invitations                                | id、class_id、email_normalized、token_hash UNIQUE、expires_at、accepted_by、accepted_at；一次性消费                                                                            |
-| 课程分配（结构保留，功能待接入）   | course_assignments                                   | id、class_id、course_id、course_version、due_at、assigned_at、revoked_at；唯一 class+course+version，复合外键指向 course_revisions                                             |
+| 课程分配（协作者实现已接入）   | course_assignments                                   | id、class_id、course_id、course_version、due_at、assigned_at、revoked_at；唯一 class+course+version，复合外键指向 course_revisions                                             |
 | 编辑并发                           | courses 扩展                                         | draft_revision 独立递增；已存在 version/published_version 的行为需与新服务共同升级                                                                                             |
 | 活动配置                           | course_draft_activities / course_revision_activities | 草稿按 course+activity，快照按 course+version+activity；learner JSON 与私有 evaluation JSON 分列或显式投影；在发布事务内复制                                                   |
 | 下架管理                           | courses 的 moderation 列（已实现）                   | moderation_status(active/withdrawn)、moderation_reason、moderated_by、moderated_at；使用同一课程行锁协调下架与学习写入，服务所有读取/写入均须检查                              |
@@ -76,8 +76,8 @@ erDiagram
 
 每个领域以新增迁移、Neon adapter、服务权限测试、页面联调一起交付。不要为“先占位”向真实库应用无用或不完整的 SQL。
 
-## 班级代码撤回后的数据库状态（2026-10-28）
+## 协作者班级实现合并后的数据库状态（2026-10-28）
 
-班级重复实现已撤回，等待协作者分支接入。上述班级相关表结构是已执行迁移的历史，不代表当前存在可用班级页面或服务。迁移 002/003 及数据保持不变，不执行回滚或删除。
+协作者 `feat/class-management` 已合入 `feat/e-module-integration`。班级代码使用 `classrooms.course_id` 单课程绑定和 `classroom_members`；迁移 `202610270002/003` 提供实际表结构。旧 `202610190001/200001` 迁移文件未重新加入仓库，避免在已应用 `202610270002` 的库上重复建表；共享 Neon 中已执行的旧记录保留。
 
-当前学习授权只使用 `enrollments.direct_access=true` 的独立选课；false 记录保留历史，不用于授权。管理员用户/课程功能保留。未来班级授权、单课程绑定与历史版本分配规则由班级负责人明确并通过兼容迁移接入，见 [班级交接说明](../../docs/engineering/classrooms.md)。
+`course_assignments` / `classroom_join_codes` 结构保留，当前班级 UI 不使用多课程分配和邀请码。删除班级会在事务内清理邀请码、分配和成员关系，并保留 `enrollments` / 学习记录。学习授权继续使用 `enrollments.direct_access`；班级创建/导入学生会写入默认 true 的 enrollment。管理员班级页面未恢复，归档字段保留。教师班级页面的学生完成率仍是样例数据，待教师学习追踪接入。详见 [班级模块](../../docs/engineering/classrooms.md)。

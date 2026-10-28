@@ -6,7 +6,7 @@
 
 现有登录、教师建课/首次发布、学生加入、开放回答、AI 反馈和教师反馈保留原来的调用入口。已有功能的可运行代码、云端连接测试与完整业务验收分别记录，不能混为一谈。
 
-新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**2026-10-28 保留 administration 五项操作；discussions 五项操作已启用**，详情见 [管理员功能](administration.md)、[师生问答实现](discussions.md)。重复班级实现已撤回，等待协作者 `feat/class-management` 合并，见 [班级交接说明](classrooms.md)。classrooms 和其余扩展操作均为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
+新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、classrooms 八项、discussions 五项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
 
 ```ts
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -16,7 +16,7 @@ const actor = await getCurrentUser();
 const result = await platformExtensions.classrooms.create(actor, {
   name: "软件工程一班",
 });
-// 班级实现待协作者接入；合法调用当前返回 NOT_IMPLEMENTED。
+// 班级实现已合并；合法调用会访问真实 Neon 仓储。
 ```
 
 这些是模块服务接口，不是已经发布的 HTTP API。后续按页面需要增加薄的 Server Action；外部调用和回调需要 Route Handler。两种适配都应复用同一服务层。
@@ -26,7 +26,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 | 层        | 文件                                            | 约定                                                                                                            |
 | --------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | 输入/输出 | `src/shared/contracts/features/*.ts`            | Zod schema、可推导 TS 类型、角色、资源规则、预留状态                                                            |
-| 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；administration 与 discussions 按操作状态启用，classrooms 等待协作者合并，其他预留操作逐项实现 |
+| 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；administration、classrooms 与 discussions 按操作状态启用，其他预留操作逐项实现 |
 | 存储端口  | `src/shared/database/extension-repositories.ts` | 具名且 actor-scoped 的查询与写入；未来 Neon adapter 必须实现所有权及版本条件                                    |
 
 现有 `PlatformRepository` 不被扩展成一大组假方法。新端口与其并存，逐个领域接入真实 adapter 后启用，避免为了添加类型而破坏现有数据库适配器。
@@ -71,7 +71,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 合同：`features/classrooms.ts`；入口：`extensions/classrooms.ts`。
 
-- `create / listMine / listMembers`：预留建班、班级列表、教师看名单。
+- `create / listMine / listMembers`：建班、班级列表、教师看名单。
 - `inviteStudents / acceptInvitation`：按邮箱邀请、受邀学生接受邀请。
 - `importStudents`：把已注册学生账号批量加入班级，返回缺失邮箱；不创建密码或冒充已验证邮箱。
 - `createJoinCode / joinByCode`：教师取得短期班级邀请码，学生加入。
@@ -80,7 +80,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 `Classroom` → `ClassroomMember` → `CourseAssignment` 为明确的独立关系。原 `Enrollment` 仍表示课程加入，不代替班级成员。当前 visibility=cohort 的历史语义是公开教学课程，不据此推断“属于某班”。班级不自动构成私有课程库；若后续需要班级专属课程，应先扩展可见范围合同。
 
-分配绑定发布版本。学生从安排进入课程时传该版本，不能始终加载最新版。班级名单只对班级教师开放；邀请令牌只有匹配且已验证邮箱的学生能消费。现阶段邮箱验证尚未接入，这项依赖必须先完成；邀请码及邮件邀请操作当前均为预留，等待协作者接入。
+分配绑定发布版本。学生从安排进入课程时传该版本，不能始终加载最新版。班级名单只对班级教师开放；邀请令牌只有匹配且已验证邮箱的学生能消费。现阶段邮箱验证尚未接入，这项依赖必须先完成；邀请码与邮件邀请仍为预留，当前通过导入已注册学生加入班级。
 
 ### 3. 课程创建、编辑、发布与个人自学
 
@@ -167,7 +167,7 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 | 平台 2：角色权限                     | 原会话与角色检查 + 每项 feature 的 roles/resourcePolicy                     |
 | 平台 3：导航工作台                   | 原两端工作台 + classrooms.listMine/listAssignments + learningPaths.listMine |
 | 平台 4：课程浏览                     | 原课程页面 + courseManagement.listCatalog + 安全活动投影                    |
-| 平台 5：管理员                       | administration 用户/课程管理接口；班级待接入                                |
+| 平台 5：管理员                       | administration 用户/课程管理接口；班级由协作者实现接入                      |
 | 生成 1：主题、目标、背景、难度、材料 | generationRequestSchema + materials                                         |
 | 生成 2：大纲、章节、互动测验         | AuthoringDraft + 活动配置 + generation.generateDraft                        |
 | 生成 3：结构校验、网页呈现           | Zod schemas + 现有文本 renderer；其他 renderer 由学生流程实现               |
