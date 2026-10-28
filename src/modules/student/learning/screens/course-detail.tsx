@@ -13,6 +13,7 @@ import { StudentCourseDiscussion } from "@/modules/student/discussions/screens/c
 import { ActivityForm } from "../../activities/components/activity-form";
 import { EnrollButton } from "../../activities/components/enroll-button";
 import { QuizForm } from "../../activities/components/quiz-form";
+import { LessonCompleteButton } from "../components/lesson-complete-button";
 
 export async function StudentCourseDetail({ id }: { id: string }) {
   const user = await getCurrentUser();
@@ -22,6 +23,22 @@ export async function StudentCourseDetail({ id }: { id: string }) {
   if (!course) notFound();
   const enrolled = workspace.enrollments.some((item) => item.courseId === id);
   const progress = calculateProgress(course, workspace.submissions, user.id);
+  const completedLessonIds = new Set(
+    (workspace.lessonCompletions ?? [])
+      .filter(
+        (item) =>
+          item.courseId === course.id &&
+          item.courseVersion === course.version &&
+          item.studentId === user.id,
+      )
+      .map((item) => item.lessonId),
+  );
+  const lessonsDone = course.lessons.filter((lesson) =>
+    completedLessonIds.has(lesson.id),
+  ).length;
+  const lessonPercent = course.lessons.length
+    ? Math.round((lessonsDone / course.lessons.length) * 100)
+    : 0;
   return (
     <>
       <Link href="/student" className="back-link">
@@ -63,10 +80,20 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                 id={lesson.id}
                 key={lesson.id}
               >
-                <p className="eyebrow">
-                  LESSON {String(index + 1).padStart(2, "0")}
-                </p>
-                <h2>{lesson.title}</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="eyebrow">
+                      LESSON {String(index + 1).padStart(2, "0")}
+                    </p>
+                    <h2>{lesson.title}</h2>
+                  </div>
+                  <LessonCompleteButton
+                    courseId={course.id}
+                    courseVersion={course.version}
+                    lessonId={lesson.id}
+                    completed={completedLessonIds.has(lesson.id)}
+                  />
+                </div>
                 {lesson.blocks.map((block) => {
                   const attempts =
                     block.type === "activity"
@@ -135,7 +162,13 @@ export async function StudentCourseDetail({ id }: { id: string }) {
             {progress.done} / {progress.total} activities submitted
           </p>
           <p className="form-hint">
-            Completion records activity submissions, not mastery.
+            Activity completion records submissions, not mastery.
+          </p>
+          <hr />
+          <h3>Lesson completion</h3>
+          <ProgressBar percent={lessonPercent} />
+          <p className="muted">
+            {lessonsDone} / {course.lessons.length} lessons completed
           </p>
           <hr />
           <Link href="/student/progress" className="text-link">

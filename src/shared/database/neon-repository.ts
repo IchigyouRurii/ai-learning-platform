@@ -84,7 +84,8 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           : `select ${courseColumns} from ${courseFrom} where (c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active') or (c.owner_id = $1 and c.visibility = 'personal') order by c.created_at desc`,
         [actor.id],
       );
-      const [enrollments, submissions, feedback, members] = await Promise.all([
+      const [enrollments, submissions, feedback, members, lessonCompletions] =
+        await Promise.all([
         pool.query<Enrollment>(
           `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt" from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1 and
           e.direct_access`,
@@ -104,6 +105,19 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
               [actor.id],
             )
           : Promise.resolve({ rows: [actor] }),
+        pool.query<{
+          courseId: string;
+          courseVersion: number;
+          lessonId: string;
+          studentId: string;
+          completedAt: Date | string;
+        }>(
+          `select lc.course_id as "courseId", lc.course_version as "courseVersion", lc.lesson_id as "lessonId", lc.student_id as "studentId", lc.completed_at as "completedAt"
+           from lesson_completions lc join courses c on c.id = lc.course_id
+           where ${teacher ? "c.owner_id" : "lc.student_id"} = $1
+           order by lc.completed_at`,
+          [actor.id],
+        ),
       ]);
       return {
         schemaVersion: 1 as const,
@@ -119,6 +133,10 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         feedback: feedback.rows.map((item) => ({
           ...item,
           createdAt: timestamp(item.createdAt),
+        })),
+        lessonCompletions: lessonCompletions.rows.map((item) => ({
+          ...item,
+          completedAt: timestamp(item.completedAt),
         })),
         members: members.rows,
       };
@@ -324,6 +342,33 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           "The course, activity, or enrollment has changed. Refresh and try again.",
         );
       return item;
+    },
+    async completeLesson(courseId, courseVersion, lessonId, studentId) {
+      const result = await pool.query(
+        `insert into lesson_completions (student_id, course_id, course_version, lesson_id)
+         select $4, c.id, r.version, $3
+         from courses c
+         join course_revisions r on r.course_id = c.id and r.version = $2
+         join enrollments e on e.course_id = c.id and e.student_id = $4 and e.direct_access
+         where c.id = $1 and c.status = 'published' and c.moderation_status = 'active'
+           and exists (
+             select 1 from jsonb_array_elements(r.content->'lessons') lesson
+             where lesson->>'id' = $3
+           )
+         on conflict (student_id, course_id, course_version, lesson_id) do nothing
+         returning lesson_id`,
+        [courseId, courseVersion, lessonId, studentId],
+      );
+      if (!result.rowCount) {
+        const existing = await pool.query(
+          "select 1 from lesson_completions where student_id = $1 and course_id = $2 and course_version = $3 and lesson_id = $4",
+          [studentId, courseId, courseVersion, lessonId],
+        );
+        if (!existing.rowCount)
+          throw new Error(
+            "The course, lesson, or enrollment has changed. Refresh and try again.",
+          );
+      }
     },
     async insertFeedback(item) {
       const result = await pool.query(

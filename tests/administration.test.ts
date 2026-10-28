@@ -51,6 +51,7 @@ beforeAll(async () => {
     "202610270001_administration.sql",
     "202610270002_classrooms.sql",
     "202610270003_admin_classrooms.sql",
+    "202610290001_lesson_completions.sql",
   ])
     await postgres.database.exec(
       await readFile(

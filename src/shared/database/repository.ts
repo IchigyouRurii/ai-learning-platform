@@ -32,6 +32,12 @@ export interface PlatformRepository {
   ): Promise<CourseDocument>;
   publishCourse(courseId: string, ownerId: string): Promise<Course>;
   enroll(courseId: string, studentId: string): Promise<void>;
+  completeLesson(
+    courseId: string,
+    courseVersion: number,
+    lessonId: string,
+    studentId: string,
+  ): Promise<void>;
   insertSubmission(submission: Submission): Promise<Submission>;
   insertFeedback(feedback: TeacherFeedback): Promise<void>;
   getLearningPath(ownerId: string): Promise<LearningPathRecord | null>;

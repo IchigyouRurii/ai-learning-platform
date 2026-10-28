@@ -9,6 +9,7 @@ export {
   createCourse,
   publishCourse,
   enrollCourse,
+  completeLesson,
   getLearningContext,
   recordSubmission,
   addTeacherFeedback,

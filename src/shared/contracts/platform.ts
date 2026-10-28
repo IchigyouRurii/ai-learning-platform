@@ -17,6 +17,13 @@ export type Submission = {
   aiFeedback: string;
   createdAt: string;
 };
+export type LessonCompletionRecord = {
+  courseId: string;
+  courseVersion: number;
+  lessonId: string;
+  studentId: string;
+  completedAt: string;
+};
 export type TeacherFeedback = {
   id: string;
   courseId: string;
@@ -72,6 +79,7 @@ export type DemoState = {
   enrollments: Enrollment[];
   submissions: Submission[];
   feedback: TeacherFeedback[];
+  lessonCompletions?: LessonCompletionRecord[];
   learningPaths?: LearningPathRecord[];
   generationRecords?: GenerationRecord[];
 };

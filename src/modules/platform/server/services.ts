@@ -133,6 +133,28 @@ export async function enrollCourse(actor: User, id: string) {
   await getRepository().enroll(id, actor.id);
 }
 
+export async function completeLesson(
+  actor: User,
+  courseId: string,
+  courseVersion: number,
+  lessonId: string,
+) {
+  assertStudent(actor);
+  const course = await requireCourse(courseId);
+  if (course.status !== "published" || course.version !== courseVersion)
+    throw new Error("课程版本已变化，请刷新后重试。");
+  if (!(await getRepository().isEnrolled(courseId, actor.id)))
+    throw new Error("请先加入这门课程。");
+  if (!course.lessons.some((lesson) => lesson.id === lessonId))
+    throw new Error("章节不属于这门课程。");
+  await getRepository().completeLesson(
+    courseId,
+    courseVersion,
+    lessonId,
+    actor.id,
+  );
+}
+
 export async function getLearningContext(
   actor: User,
   courseId: string,

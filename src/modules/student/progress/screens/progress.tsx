@@ -70,6 +70,16 @@ export async function StudentProgress() {
               workspace.submissions,
               user.id,
             );
+            const lessonsDone = new Set(
+              (workspace.lessonCompletions ?? [])
+                .filter(
+                  (item) =>
+                    item.courseId === course.id &&
+                    item.courseVersion === course.version &&
+                    item.studentId === user.id,
+                )
+                .map((item) => item.lessonId),
+            ).size;
             return (
               <div className="progress-row" key={course.id}>
                 <div>
@@ -78,6 +88,9 @@ export async function StudentProgress() {
                   </Link>
                   <p className="muted">
                     {progress.done} / {progress.total} activities submitted
+                  </p>
+                  <p className="muted">
+                    {lessonsDone} / {course.lessons.length} lessons completed
                   </p>
                 </div>
                 <div className="progress-cell">

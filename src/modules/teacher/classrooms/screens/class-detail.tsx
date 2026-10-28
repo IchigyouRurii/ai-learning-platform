@@ -100,7 +100,19 @@ export async function TeacherClassDetail({
           .slice()
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
       : undefined;
-    return { member, progress, latest };
+    const lessonsDone = course
+      ? new Set(
+          (workspace.lessonCompletions ?? [])
+            .filter(
+              (item) =>
+                item.courseId === course.id &&
+                item.courseVersion === course.version &&
+                item.studentId === member.student.id,
+            )
+            .map((item) => item.lessonId),
+        ).size
+      : 0;
+    return { member, progress, latest, lessonsDone };
   });
   const tracked = rows.filter(
     (row): row is typeof row & { progress: NonNullable<typeof row.progress> } =>
@@ -212,13 +224,14 @@ export async function TeacherClassDetail({
                   <TableHead>Email</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead>Activities</TableHead>
+                  <TableHead>Lessons</TableHead>
                   <TableHead>Completion</TableHead>
                   <TableHead>Last activity</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ member, progress, latest }) => (
+                {rows.map(({ member, progress, latest, lessonsDone }) => (
                   <TableRow key={member.student.id}>
                     <TableCell className="font-medium">
                       {member.student.name}
@@ -229,6 +242,9 @@ export async function TeacherClassDetail({
                       {progress
                         ? `${progress.done} / ${progress.total}`
                         : "Not available"}
+                    </TableCell>
+                    <TableCell>
+                      {course ? `${lessonsDone} / ${course.lessons.length}` : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="min-w-28">
