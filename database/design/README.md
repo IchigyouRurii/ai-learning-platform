@@ -4,7 +4,7 @@
 
 ## 现有表
 
-认证表由 Better Auth 管理。业务现有 courses、course_revisions、enrollments、submissions、teacher_feedback，另有尚无完整业务实现的 learning_profiles、generation_jobs。
+认证表由 Better Auth 管理。业务现有 courses、course_revisions、enrollments、submissions、teacher_feedback，另有尚无完整业务实现的 learning_profiles、generation_jobs。`submissions` 现在包含可空 `score` / `max_score`；只有两项都有值时才计入 quiz 统计，旧提交保持 null。
 
 CourseDraft 继续用于原有文字/开放回答流程；新 AuthoringDraft 通过独立活动配置扩充，不把答题正确选项意外塞进公共课程列表。发布快照中的活动配置和课程内容须在同一事务冻结。
 

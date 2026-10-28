@@ -86,39 +86,39 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       );
       const [enrollments, submissions, feedback, members, lessonCompletions] =
         await Promise.all([
-        pool.query<Enrollment>(
-          `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt" from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1 and
+          pool.query<Enrollment>(
+            `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt" from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1 and
           e.direct_access`,
-          [actor.id],
-        ),
-        pool.query<Submission>(
-          `select s.id, s.course_id as "courseId", s.course_version as "courseVersion", s.activity_id as "activityId", s.student_id as "studentId", s.answer, s.ai_feedback as "aiFeedback", s.created_at as "createdAt" from submissions s join courses c on c.id = s.course_id where ${teacher ? "c.owner_id" : "s.student_id"} = $1 order by s.created_at`,
-          [actor.id],
-        ),
-        pool.query<TeacherFeedback>(
-          `select f.id, f.course_id as "courseId", f.student_id as "studentId", f.teacher_id as "teacherId", f.message, f.created_at as "createdAt" from teacher_feedback f join courses c on c.id = f.course_id where ${teacher ? "c.owner_id" : "f.student_id"} = $1 order by f.created_at`,
-          [actor.id],
-        ),
-        teacher
-          ? pool.query<User>(
-              `select distinct u.id, u.name, u.role from "user" u join enrollments e on e.student_id = u.id join courses c on c.id = e.course_id where c.owner_id = $1`,
-              [actor.id],
-            )
-          : Promise.resolve({ rows: [actor] }),
-        pool.query<{
-          courseId: string;
-          courseVersion: number;
-          lessonId: string;
-          studentId: string;
-          completedAt: Date | string;
-        }>(
-          `select lc.course_id as "courseId", lc.course_version as "courseVersion", lc.lesson_id as "lessonId", lc.student_id as "studentId", lc.completed_at as "completedAt"
+            [actor.id],
+          ),
+          pool.query<Submission>(
+            `select s.id, s.course_id as "courseId", s.course_version as "courseVersion", s.activity_id as "activityId", s.student_id as "studentId", s.answer, s.ai_feedback as "aiFeedback", s.score, s.max_score as "maxScore", s.created_at as "createdAt" from submissions s join courses c on c.id = s.course_id where ${teacher ? "c.owner_id" : "s.student_id"} = $1 order by s.created_at`,
+            [actor.id],
+          ),
+          pool.query<TeacherFeedback>(
+            `select f.id, f.course_id as "courseId", f.student_id as "studentId", f.teacher_id as "teacherId", f.message, f.created_at as "createdAt" from teacher_feedback f join courses c on c.id = f.course_id where ${teacher ? "c.owner_id" : "f.student_id"} = $1 order by f.created_at`,
+            [actor.id],
+          ),
+          teacher
+            ? pool.query<User>(
+                `select distinct u.id, u.name, u.role from "user" u join enrollments e on e.student_id = u.id join courses c on c.id = e.course_id where c.owner_id = $1`,
+                [actor.id],
+              )
+            : Promise.resolve({ rows: [actor] }),
+          pool.query<{
+            courseId: string;
+            courseVersion: number;
+            lessonId: string;
+            studentId: string;
+            completedAt: Date | string;
+          }>(
+            `select lc.course_id as "courseId", lc.course_version as "courseVersion", lc.lesson_id as "lessonId", lc.student_id as "studentId", lc.completed_at as "completedAt"
            from lesson_completions lc join courses c on c.id = lc.course_id
            where ${teacher ? "c.owner_id" : "lc.student_id"} = $1
            order by lc.completed_at`,
-          [actor.id],
-        ),
-      ]);
+            [actor.id],
+          ),
+        ]);
       return {
         schemaVersion: 1 as const,
         courses: courses.rows.map(courseFromRow),
@@ -162,6 +162,13 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
          where e.course_id = $1 and e.student_id = $2 and e.direct_access
          and c.status = 'published' and c.moderation_status = 'active'`,
         [courseId, studentId],
+      );
+      return Boolean(result.rowCount);
+    },
+    async isCourseManagedByClass(courseId) {
+      const result = await pool.query(
+        "select 1 from classrooms where course_id = $1 limit 1",
+        [courseId],
       );
       return Boolean(result.rowCount);
     },
@@ -321,8 +328,8 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         `with available as (select id, published_version from courses where id = $2 and status = 'published' and moderation_status = 'active' for share),
         student as (select id from "user" where id = $5 and role = 'student' for share),
         direct_grant as (select e.student_id from enrollments e join available c on c.id = e.course_id where e.student_id = $5 and e.direct_access and c.published_version = $3 for share of e)
-        insert into submissions (id, course_id, course_version, activity_id, student_id, answer, ai_feedback, created_at)
-        select $1, c.id, r.version, $4, s.id, $6, $7, $8 from available c
+        insert into submissions (id, course_id, course_version, activity_id, student_id, answer, ai_feedback, score, max_score, created_at)
+        select $1, c.id, r.version, $4, s.id, $6, $7, $8, $9, $10 from available c
         join course_revisions r on r.course_id = c.id and r.version = $3 cross join student s
         where exists(select 1 from direct_grant)
         and exists (select 1 from jsonb_array_elements(r.content->'lessons') l cross join lateral jsonb_array_elements(l->'blocks') b where b->>'type' = 'activity' and b->'activity'->>'id' = $4) returning id`,
@@ -334,6 +341,8 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           item.studentId,
           item.answer,
           item.aiFeedback,
+          item.score ?? null,
+          item.maxScore ?? null,
           item.createdAt,
         ],
       );

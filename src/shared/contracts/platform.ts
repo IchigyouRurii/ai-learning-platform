@@ -15,6 +15,8 @@ export type Submission = {
   studentId: string;
   answer: string;
   aiFeedback: string;
+  score?: number | null;
+  maxScore?: number | null;
   createdAt: string;
 };
 export type LessonCompletionRecord = {

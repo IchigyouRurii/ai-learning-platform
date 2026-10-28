@@ -5,6 +5,7 @@ import {
   calculateProgress,
   getCurrentUser,
   getWorkspace,
+  isCourseManagedByClass,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { toSafeActivity } from "@/shared/contracts";
@@ -22,6 +23,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
   const course = workspace.courses.find((item) => item.id === id);
   if (!course) notFound();
   const enrolled = workspace.enrollments.some((item) => item.courseId === id);
+  const classManaged = await isCourseManagedByClass(course.id);
   const progress = calculateProgress(course, workspace.submissions, user.id);
   const completedLessonIds = new Set(
     (workspace.lessonCompletions ?? [])
@@ -71,7 +73,14 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                 Enroll to complete activities, receive feedback, and save your
                 progress.
               </p>
-              <EnrollButton courseId={course.id} />
+              {classManaged ? (
+                <p className="muted">
+                  This course is managed by a class. Ask your teacher to add you
+                  to the class.
+                </p>
+              ) : (
+                <EnrollButton courseId={course.id} />
+              )}
             </section>
           ) : (
             course.lessons.map((lesson, index) => (

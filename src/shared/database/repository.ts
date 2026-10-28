@@ -23,6 +23,7 @@ export interface PlatformRepository {
   findCourse(id: string): Promise<Course | null>;
   getCourseDocument(id: string): Promise<CourseDocument | null>;
   isEnrolled(courseId: string, studentId: string): Promise<boolean>;
+  isCourseManagedByClass(courseId: string): Promise<boolean>;
   insertCourse(course: Course): Promise<Course>;
   updateCourseDraft(
     courseId: string,

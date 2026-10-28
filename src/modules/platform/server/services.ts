@@ -119,9 +119,17 @@ export async function publishCourse(actor: User, id: string) {
   return getRepository().publishCourse(id, actor.id);
 }
 
+export async function isCourseManagedByClass(courseId: string) {
+  return getRepository().isCourseManagedByClass(courseId);
+}
+
 export async function enrollCourse(actor: User, id: string) {
   assertStudent(actor);
   const course = await requireCourse(id);
+  if (await getRepository().isCourseManagedByClass(id))
+    throw new Error(
+      "This course is managed by a class. Ask your teacher to add you.",
+    );
   const personalOwner =
     course.visibility === "personal" && course.ownerId === actor.id;
   if (

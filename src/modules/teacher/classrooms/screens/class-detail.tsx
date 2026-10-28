@@ -3,17 +3,17 @@ import { notFound } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
-  BarChart3,
   CheckCircle2,
+  ListChecks,
   Users,
 } from "lucide-react";
 import {
-  calculateProgress,
   getCurrentUser,
   getWorkspace,
   platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
+import { calculateQuizProgress, type Course } from "@/shared/contracts";
 import {
   Table,
   TableBody,
@@ -37,6 +37,14 @@ const dateLabel = (value: string) =>
   new Date(value).toLocaleDateString("en-US", {
     timeZone: "Asia/Shanghai",
   });
+
+function quizIdsForLesson(lesson: Course["lessons"][number]) {
+  return lesson.blocks.flatMap((block) =>
+    block.type === "activity" && block.activity.type === "quiz"
+      ? [block.activity.id]
+      : [],
+  );
+}
 
 export async function TeacherClassDetail({
   id,
@@ -86,50 +94,65 @@ export async function TeacherClassDetail({
     (item) => item.id === classroom.courseId,
   );
   const rows = members.map((member) => {
-    const progress = course
-      ? calculateProgress(course, workspace.submissions, member.student.id)
+    const quiz = course
+      ? calculateQuizProgress(course, workspace.submissions, member.student.id)
       : null;
-    const latest = course
+    const latestQuiz = course
       ? workspace.submissions
           .filter(
             (item) =>
               item.courseId === course.id &&
               item.courseVersion === course.version &&
-              item.studentId === member.student.id,
+              item.studentId === member.student.id &&
+              item.score != null,
           )
           .slice()
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
       : undefined;
-    const lessonsDone = course
-      ? new Set(
-          (workspace.lessonCompletions ?? [])
-            .filter(
-              (item) =>
-                item.courseId === course.id &&
-                item.courseVersion === course.version &&
-                item.studentId === member.student.id,
-            )
-            .map((item) => item.lessonId),
-        ).size
-      : 0;
-    return { member, progress, latest, lessonsDone };
+    return { member, quiz, latestQuiz };
   });
-  const tracked = rows.filter(
-    (row): row is typeof row & { progress: NonNullable<typeof row.progress> } =>
-      row.progress !== null,
-  );
-  const averagePercent = tracked.length
+  const lessonsWithQuizzes = course
+    ? course.lessons.filter((lesson) => quizIdsForLesson(lesson).length).length
+    : 0;
+  const completedStudents = rows.filter((row) => row.quiz?.completed).length;
+  const averageChapterPercent = rows.length
     ? Math.round(
-        tracked.reduce((sum, row) => sum + row.progress.percent, 0) /
-          tracked.length,
+        (rows.reduce((sum, row) => {
+          if (!row.quiz || row.quiz.lessonsWithQuizzes === 0) return sum;
+          return sum + row.quiz.passedLessons / row.quiz.lessonsWithQuizzes;
+        }, 0) /
+          rows.length) *
+          100,
       )
     : 0;
-  const completedCount = tracked.filter(
-    (row) => row.progress.percent === 100,
+  const needsAttention = rows.filter(
+    (row) =>
+      row.quiz &&
+      row.quiz.lessonsWithQuizzes > 0 &&
+      row.quiz.passedQuizzes === 0,
   ).length;
-  const needsAttention = tracked.filter(
-    (row) => row.progress.percent < 50,
-  ).length;
+  const chapterStats = course
+    ? course.lessons.flatMap((lesson) => {
+        const quizIds = quizIdsForLesson(lesson);
+        if (!quizIds.length) return [];
+        const passedStudents = rows.filter(
+          (row) =>
+            row.quiz?.lessons.find((item) => item.lessonId === lesson.id)
+              ?.passed,
+        ).length;
+        return [
+          {
+            lessonId: lesson.id,
+            title: lesson.title,
+            quizCount: quizIds.length,
+            passedStudents,
+            percent: members.length
+              ? Math.round((passedStudents / members.length) * 100)
+              : 0,
+          },
+        ];
+      })
+    : [];
 
   return (
     <>
@@ -165,7 +188,7 @@ export async function TeacherClassDetail({
       {!course && (
         <p className="error-text" role="alert">
           The course bound to this class is not available in your workspace, so
-          progress cannot be calculated.
+          quiz progress cannot be calculated.
         </p>
       )}
       <section className="stats-grid" aria-label="Class progress summary">
@@ -176,21 +199,21 @@ export async function TeacherClassDetail({
           icon={<Users size={17} />}
         />
         <StatCard
-          label="Average completion"
-          value={`${averagePercent}%`}
-          detail="Based on submitted activities"
-          icon={<BarChart3 size={17} />}
+          label="Completed students"
+          value={`${completedStudents} / ${members.length}`}
+          detail="Passed every chapter quiz"
+          icon={<CheckCircle2 size={17} />}
         />
         <StatCard
-          label="Completed"
-          value={completedCount}
-          detail="Students at 100%"
-          icon={<CheckCircle2 size={17} />}
+          label="Average chapter completion"
+          value={`${averageChapterPercent}%`}
+          detail="Based on quiz passes"
+          icon={<ListChecks size={17} />}
         />
         <StatCard
           label="Needs attention"
           value={needsAttention}
-          detail="Below 50% completion"
+          detail="No quiz passed yet"
           icon={<AlertTriangle size={17} />}
         />
       </section>
@@ -200,8 +223,9 @@ export async function TeacherClassDetail({
             <div>
               <h2>Student progress</h2>
               <p className="muted">
-                Completion is based on activity submissions for the course bound
-                to this class. It is not a mastery score.
+                A chapter is complete when the student passes every quiz in it
+                with at least 60%. The best attempt is used, and quizzes can be
+                retaken.
               </p>
             </div>
             <Link href="/teacher/students" className="text-link">
@@ -223,15 +247,15 @@ export async function TeacherClassDetail({
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Joined</TableHead>
-                  <TableHead>Activities</TableHead>
-                  <TableHead>Lessons</TableHead>
-                  <TableHead>Completion</TableHead>
-                  <TableHead>Last activity</TableHead>
+                  <TableHead>Chapters</TableHead>
+                  <TableHead>Quizzes</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last quiz</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ member, progress, latest, lessonsDone }) => (
+                {rows.map(({ member, quiz, latestQuiz }) => (
                   <TableRow key={member.student.id}>
                     <TableCell className="font-medium">
                       {member.student.name}
@@ -239,23 +263,28 @@ export async function TeacherClassDetail({
                     <TableCell>{member.student.email}</TableCell>
                     <TableCell>{dateLabel(member.joinedAt)}</TableCell>
                     <TableCell>
-                      {progress
-                        ? `${progress.done} / ${progress.total}`
-                        : "Not available"}
+                      {quiz
+                        ? `${quiz.passedLessons} / ${quiz.lessonsWithQuizzes}`
+                        : "—"}
                     </TableCell>
                     <TableCell>
-                      {course ? `${lessonsDone} / ${course.lessons.length}` : "—"}
+                      {quiz
+                        ? `${quiz.passedQuizzes} / ${quiz.totalQuizzes}`
+                        : "—"}
                     </TableCell>
                     <TableCell>
-                      <div className="min-w-28">
-                        <ProgressBar percent={progress?.percent ?? 0} />
-                        <span className="form-hint">
-                          {progress ? `${progress.percent}%` : "—"}
-                        </span>
-                      </div>
+                      {quiz && quiz.lessonsWithQuizzes > 0 ? (
+                        <Badge tone={quiz.completed ? "green" : "amber"}>
+                          {quiz.completed ? "Completed" : "In progress"}
+                        </Badge>
+                      ) : (
+                        <span className="muted">No quizzes</span>
+                      )}
                     </TableCell>
                     <TableCell>
-                      {latest ? dateLabel(latest.createdAt) : "No activity yet"}
+                      {latestQuiz
+                        ? dateLabel(latestQuiz.createdAt)
+                        : "No quiz yet"}
                     </TableCell>
                     <TableCell className="text-right">
                       <RemoveMemberButton
@@ -284,6 +313,55 @@ export async function TeacherClassDetail({
           )}
         </aside>
       </div>
+      <section className="panel mt-6">
+        <div className="panel-heading">
+          <div>
+            <h2>Chapter completion</h2>
+            <p className="muted">
+              Students who passed every quiz in each chapter. Chapters without
+              quizzes are not counted.
+            </p>
+          </div>
+          <Badge>
+            {lessonsWithQuizzes}{" "}
+            {lessonsWithQuizzes === 1 ? "chapter" : "chapters"}
+          </Badge>
+        </div>
+        {!chapterStats.length ? (
+          <p className="muted">
+            This course has no quiz activities yet. Publish a course with
+            quizzes to track class progress here.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Chapter</TableHead>
+                <TableHead>Quizzes</TableHead>
+                <TableHead>Students passed</TableHead>
+                <TableHead>Completion</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {chapterStats.map((chapter) => (
+                <TableRow key={chapter.lessonId}>
+                  <TableCell className="font-medium">{chapter.title}</TableCell>
+                  <TableCell>{chapter.quizCount}</TableCell>
+                  <TableCell>
+                    {chapter.passedStudents} / {members.length}
+                  </TableCell>
+                  <TableCell>
+                    <div className="min-w-28">
+                      <ProgressBar percent={chapter.percent} />
+                      <span className="form-hint">{chapter.percent}%</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
     </>
   );
 }

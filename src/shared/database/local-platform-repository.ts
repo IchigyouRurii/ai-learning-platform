@@ -110,6 +110,9 @@ export function createLocalPlatformRepository(
         (item) => item.courseId === courseId && item.studentId === studentId,
       );
     },
+    async isCourseManagedByClass() {
+      return false;
+    },
     async insertCourse(course) {
       return store.mutate((state) => {
         const stored: Course = {

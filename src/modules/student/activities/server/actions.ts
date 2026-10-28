@@ -45,6 +45,8 @@ export async function submitQuizAction(
       activityId: activity.id,
       answer: JSON.stringify(input.answers),
       aiFeedback: result.feedback,
+      score: result.score,
+      maxScore: result.maxScore,
     });
     revalidatePath("/student");
     revalidatePath("/teacher");
