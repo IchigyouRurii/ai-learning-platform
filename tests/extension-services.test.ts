@@ -31,7 +31,8 @@ function legacyCourse() {
   course.lessons = course.lessons.map((lesson) => ({
     ...lesson,
     blocks: lesson.blocks.filter(
-      (block) => block.type !== "activity" || block.activity.type === "reflection",
+      (block) =>
+        block.type !== "activity" || block.activity.type === "reflection",
     ),
   }));
   return course;
@@ -64,6 +65,10 @@ const key = "d7b59eb2-2266-4f8b-a0c3-e31b994f24bd";
 const inputs = {
   classrooms: {
     create: { name: "一班" },
+    get: { classId: "class" },
+    update: { classId: "class", name: "新班名" },
+    listAssignableCourses: { classId: "class" },
+    removeAssignment: { classId: "class", assignmentId: "assignment" },
     listMine: {},
     listMembers: { classId: "class" },
     inviteStudents: { classId: "class", emails: ["student@example.com"] },
@@ -157,6 +162,25 @@ const inputs = {
     resolve: { questionId: "question" },
   },
   administration: {
+    listClassrooms: {},
+    getClassroom: { classId: "class" },
+    setClassroomStatus: {
+      classId: "class",
+      expectedStatus: "active",
+      status: "archived",
+      reason: "Review",
+    },
+    removeClassroomMember: {
+      classId: "class",
+      studentId: "student",
+      reason: "Review",
+    },
+    removeClassroomAssignment: {
+      classId: "class",
+      assignmentId: "assignment",
+      reason: "Review",
+    },
+    getOverview: {},
     listUsers: {},
     changeRole: { userId: "user", expectedRole: "student", role: "teacher" },
     listCourses: {},
@@ -185,12 +209,14 @@ describe("reserved service boundaries", () => {
           definition.input.safeParse(examples[name]).success,
           `${domain}.${name}`,
         ).toBe(true);
-        expect(
-          await service[name](
-            { ...actor, role: definition.roles[0] },
-            examples[name],
-          ),
-        ).toMatchObject({ ok: false, code: "NOT_IMPLEMENTED" });
+        if (definition.status === "reserved") {
+          expect(
+            await service[name](
+              { ...actor, role: definition.roles[0] },
+              examples[name],
+            ),
+          ).toMatchObject({ ok: false, code: "NOT_IMPLEMENTED" });
+        }
         expect(await service[name](null, examples[name])).toMatchObject({
           ok: false,
           code: "AUTH_REQUIRED",
@@ -207,7 +233,18 @@ describe("reserved service boundaries", () => {
     }
     expect(getExtensionCapabilities()).toHaveLength(count);
     expect(
-      getExtensionCapabilities().every((item) => item.status === "reserved"),
+      getExtensionCapabilities().filter(
+        (item) => item.status === "implemented",
+      ),
+    ).toHaveLength(23);
+    expect(
+      getExtensionCapabilities()
+        .filter((item) => item.status === "implemented")
+        .every(
+          (item) =>
+            item.operation.startsWith("administration.") ||
+            item.operation.startsWith("classrooms."),
+        ),
     ).toBe(true);
     expect(external.database).not.toHaveBeenCalled();
     expect(external.ai).not.toHaveBeenCalled();

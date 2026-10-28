@@ -58,9 +58,21 @@ export function AppShell({
         {user.role !== "teacher" && (
           <div className="sidebar-bottom">
             <div className="sidebar-note">
-              <Sparkles size={18} />
-              <strong>Start with a question</strong>
-              <p>Learn through practice and participation.</p>
+              {user.role === "admin" ? (
+                <ShieldCheck size={18} />
+              ) : (
+                <Sparkles size={18} />
+              )}
+              <strong>
+                {user.role === "admin"
+                  ? "Keep learning on track"
+                  : "Start with a question"}
+              </strong>
+              <p>
+                {user.role === "admin"
+                  ? "Support the people and courses behind every learning experience."
+                  : "Learn through practice and participation."}
+              </p>
             </div>
             <div className="sidebar-version">Education, made personal.</div>
           </div>

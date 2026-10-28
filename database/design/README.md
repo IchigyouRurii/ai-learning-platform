@@ -1,6 +1,6 @@
 # 扩展数据模型设计
 
-本目录是设计约定，不被 db:migrate 执行。本次补框架没有创建新云端数据表，也没有修改任何已应用迁移。实际开发某领域时，负责人基于本设计新增 `database/migrations/<timestamp>_<domain>.sql` 并验收。
+本目录是设计约定，不被 db:migrate 执行。管理员与班级领域已于 2026-10-27 实施，实际状态以相应迁移和领域说明为准；其余未启用条目仍是计划。实际开发某领域时，负责人基于本设计新增 `database/migrations/<timestamp>_<domain>.sql` 并验收，不修改任何已应用迁移。
 
 ## 现有表
 
@@ -12,14 +12,14 @@ CourseDraft 继续用于原有文字/开放回答流程；新 AuthoringDraft 通
 
 | 领域         | 计划表或变更                                         | 关键字段与约束                                                                                                                                                                 |
 | ------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 班级         | classrooms                                           | id、teacher_id、name、description、created_at；teacher 外键 user                                                                                                               |
-| 班级成员     | classroom_members                                    | (class_id, student_id) 主键、joined_at；只允许学生；班级拥有者查询名单                                                                                                         |
-| 班级邀请码   | classroom_join_codes                                 | class_id、token_hash UNIQUE、expires_at、revoked_at；仅保存哈希                                                                                                                |
+| 班级（已实现） | classrooms                                           | id、teacher_id、name、description、created_at、status(active/archived)、archive_reason、archived_by、archived_at；teacher/管理员外键 user                                                                                                               |
+| 班级成员（已实现） | classroom_members                                    | (class_id, student_id) 主键、joined_at；只允许学生；班级拥有者查询名单                                                                                                         |
+| 班级邀请码（已实现） | classroom_join_codes / classroom_join_attempts                                 | class_id 主键、token_hash UNIQUE、expires_at；更换即替换旧码，仅保存哈希；join_attempts 持久限制尝试次数                                                                                                                |
 | 邮箱邀请     | classroom_invitations                                | id、class_id、email_normalized、token_hash UNIQUE、expires_at、accepted_by、accepted_at；一次性消费                                                                            |
-| 课程分配     | course_assignments                                   | id、class_id、course_id、course_version、due_at、assigned_at；唯一 class+course+version，复合外键指向 course_revisions                                                         |
+| 课程分配（已实现） | course_assignments                                   | id、class_id、course_id、course_version、due_at、assigned_at、revoked_at；唯一 class+course+version，复合外键指向 course_revisions                                                         |
 | 编辑并发     | courses 扩展                                         | draft_revision 独立递增；已存在 version/published_version 的行为需与新服务共同升级                                                                                             |
 | 活动配置     | course_draft_activities / course_revision_activities | 草稿按 course+activity，快照按 course+version+activity；learner JSON 与私有 evaluation JSON 分列或显式投影；在发布事务内复制                                                   |
-| 下架管理     | course_moderation                                    | course_id 主键、status(active/withdrawn)、reason、admin_id、updated_at；服务所有读取/写入均须检查                                                                              |
+| 下架管理     | courses 的 moderation 列（已实现）                  | moderation_status(active/withdrawn)、moderation_reason、moderated_by、moderated_at；使用同一课程行锁协调下架与学习写入，服务所有读取/写入均须检查                                                                 |
 | 章节完成     | lesson_completions                                   | (student_id, course_id, course_version, lesson_id) 唯一、completed_at；复合外键版本，服务核对章节存在                                                                          |
 | 新活动尝试   | activity_attempts                                    | id、student_id、course_id、course_version、activity_id、response JSON、feedback、score、max_score、idempotency_key、request_hash、created_at；评分空值成对且 0≤score≤max_score |
 | 角色扮演     | roleplay_sessions / roleplay_messages                | 会话绑定学生、课程版本、活动；消息有服务端角色和 turn_index；消息顺序唯一，结束不可追加                                                                                        |
@@ -75,3 +75,7 @@ erDiagram
 4. 异步 worker，只有真实执行器可用才启用任务接口。
 
 每个领域以新增迁移、Neon adapter、服务权限测试、页面联调一起交付。不要为“先占位”向真实库应用无用或不完整的 SQL。
+
+2026-10-27：班级、成员、邀请码/尝试次数、版本化分配已实现；enrollments 新增 direct_access 区分独立加入与班级历史记录，具体规则见 [班级管理](../../docs/engineering/classrooms.md)。邮件邀请表仍未实现。
+
+管理员班级治理（202610270003）：归档暂停班级授权，独立选课保留；恢复须遵守课程管理状态，邀请码不复活。成员、分配和学习历史保留；管理变更与审计在同一事务中落库。

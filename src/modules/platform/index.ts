@@ -1,11 +1,19 @@
 // Public server API. Business modules should import from here, not internal files.
 export { getCurrentUser, getSessionUser, DEMO_USERS } from "./server/identity";
 export {
+  changeUserRoleAction,
+  withdrawCourseAction,
+  setClassroomStatusAction,
+  adminRemoveClassroomMemberAction,
+  adminRemoveClassroomAssignmentAction,
+} from "./server/admin-actions";
+export {
   getWorkspace,
   createCourse,
   publishCourse,
   enrollCourse,
   getLearningContext,
+  getAssignedLearningCourse,
   recordSubmission,
   addTeacherFeedback,
   calculateProgress,

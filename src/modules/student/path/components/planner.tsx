@@ -28,7 +28,7 @@ export function LearningPathPlanner({
 }: {
   courses: Pick<
     Course,
-    "id" | "version" | "title" | "subject" | "description" | "lessons"
+    "id" | "version" | "title" | "subject" | "description"
   >[];
   savedPath: LearningPathRecord | null;
   history?: LearningPathRecord[];
@@ -178,9 +178,13 @@ export function LearningPathPlanner({
                   <li key={step.courseId}>
                     <span className="path-order">{index + 1}</span>
                     <div>
-                      <Link href={`/student/courses/${step.courseId}`}>
-                        <strong>{course?.title ?? step.courseId}</strong>
-                      </Link>
+                      {course ? (
+                        <Link href={`/student/courses/${step.courseId}`}>
+                          <strong>{course.title}</strong>
+                        </Link>
+                      ) : (
+                        <strong>Course unavailable</strong>
+                      )}
                       <p className="muted">
                         {course?.subject} · about {step.targetMinutes} minutes
                       </p>

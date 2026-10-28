@@ -7,11 +7,13 @@ import { submitAnswerAction } from "../server/actions";
 
 export function ActivityForm({
   courseId,
+  courseVersion,
   activity,
   latest,
   history = [],
 }: {
   courseId: string;
+  courseVersion?: number;
   activity: Activity;
   latest?: Submission;
   history?: Submission[];
@@ -42,6 +44,7 @@ export function ActivityForm({
           startTransition(async () => {
             const result = await submitAnswerAction({
               courseId,
+              courseVersion,
               activityId: activity.id,
               answer,
               background,

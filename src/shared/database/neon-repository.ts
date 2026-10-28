@@ -6,7 +6,6 @@ import {
   type CourseDraft,
   type Enrollment,
   type GenerationKind,
-  type GenerationRecord,
   type LearningPathRecord,
   type Submission,
   type TeacherFeedback,
@@ -23,6 +22,8 @@ type CourseRow = {
   content: unknown;
   created_at: Date | string;
   updated_at: Date | string;
+  moderation_status: "active" | "withdrawn";
+  moderation_reason: string;
 };
 type CourseDocumentRow = {
   id: string;
@@ -35,8 +36,10 @@ type CourseDocumentRow = {
   draft_content: unknown;
   created_at: Date | string;
   updated_at: Date | string;
+  moderation_status: "active" | "withdrawn";
+  moderation_reason: string;
 };
-const courseColumns = `c.id, c.owner_id, c.status, c.visibility, c.version, coalesce(r.content, c.draft_content) as content, c.created_at, c.updated_at`;
+const courseColumns = `c.id, c.owner_id, c.status, c.visibility, c.version, coalesce(r.content, c.draft_content) as content, c.created_at, c.updated_at, c.moderation_status, c.moderation_reason`;
 const courseFrom = `courses c left join course_revisions r on r.course_id = c.id and r.version = c.published_version`;
 const timestamp = (value: string | Date) => new Date(value).toISOString();
 function courseFromRow(row: CourseRow): Course {
@@ -49,6 +52,8 @@ function courseFromRow(row: CourseRow): Course {
     version: row.version,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
+    moderationStatus: row.moderation_status,
+    withdrawalReason: row.moderation_reason,
   };
 }
 function documentFromRow(row: CourseDocumentRow): CourseDocument {
@@ -63,9 +68,11 @@ function documentFromRow(row: CourseDocumentRow): CourseDocument {
     content: courseDraftSchema.parse(row.draft_content),
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
+    moderationStatus: row.moderation_status,
+    withdrawalReason: row.moderation_reason,
   };
 }
-const documentColumns = `id, owner_id, status, visibility, version, published_version, draft_revision, draft_content, created_at, updated_at`;
+const documentColumns = `id, owner_id, status, visibility, version, published_version, draft_revision, draft_content, created_at, updated_at, moderation_status, moderation_reason`;
 
 export function createNeonRepository(pool: Pool): PlatformRepository {
   return {
@@ -74,12 +81,14 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       const courses = await pool.query<CourseRow>(
         teacher
           ? `select ${courseColumns} from ${courseFrom} where c.owner_id = $1 order by c.created_at desc`
-          : `select ${courseColumns} from ${courseFrom} where (c.status = 'published' and c.visibility = 'cohort') or (c.owner_id = $1 and c.visibility = 'personal') order by c.created_at desc`,
+          : `select ${courseColumns} from ${courseFrom} where (c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active') or (c.owner_id = $1 and c.visibility = 'personal') order by c.created_at desc`,
         [actor.id],
       );
       const [enrollments, submissions, feedback, members] = await Promise.all([
         pool.query<Enrollment>(
-          `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt" from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1`,
+          `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt" from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1 and
+          (e.direct_access or exists(select 1 from classroom_members m join classrooms cl on cl.id = m.class_id and cl.status = 'active' join course_assignments a on a.class_id = m.class_id
+           where m.student_id = e.student_id and a.course_id = e.course_id and a.revoked_at is null ${teacher ? "" : "and a.course_version = c.published_version"}))`,
           [actor.id],
         ),
         pool.query<Submission>(
@@ -115,10 +124,12 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         members: members.rows,
       };
     },
-    async findCourse(id) {
+    async findCourse(id, version) {
       const result = await pool.query<CourseRow>(
-        `select ${courseColumns} from ${courseFrom} where c.id = $1`,
-        [id],
+        version === undefined
+          ? `select ${courseColumns} from ${courseFrom} where c.id = $1`
+          : `select ${courseColumns.replace("c.version,", "r.version,")} from courses c join course_revisions r on r.course_id = c.id and r.version = $2 where c.id = $1 and c.status = 'published'`,
+        version === undefined ? [id] : [id, version],
       );
       return result.rows[0] ? courseFromRow(result.rows[0]) : null;
     },
@@ -129,15 +140,18 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       );
       return result.rows[0] ? documentFromRow(result.rows[0]) : null;
     },
-    async isEnrolled(courseId, studentId) {
-      return Boolean(
-        (
-          await pool.query(
-            "select 1 from enrollments where course_id = $1 and student_id = $2",
-            [courseId, studentId],
-          )
-        ).rowCount,
+    async isEnrolled(courseId, studentId, version) {
+      const result = await pool.query(
+        `select 1 from enrollments e join courses c on c.id = e.course_id
+        join "user" u on u.id = e.student_id and u.role = 'student'
+        where e.course_id = $1 and e.student_id = $2 and c.status = 'published' and c.moderation_status = 'active'
+        and ((e.direct_access and ($3::integer is null or $3 = c.published_version)) or exists (
+          select 1 from classroom_members m join classrooms cl on cl.id = m.class_id and cl.status = 'active' join course_assignments a on a.class_id = m.class_id
+          where m.student_id = e.student_id and a.course_id = e.course_id and a.revoked_at is null
+          and ($3::integer is null or a.course_version = $3)))`,
+        [courseId, studentId, version ?? null],
       );
+      return Boolean(result.rowCount);
     },
     async insertCourse(course) {
       const { title, description, subject, audience, goals, lessons } = course;
@@ -152,6 +166,17 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       const client = await pool.connect();
       try {
         await client.query("begin");
+        const owner = await client.query<{ role: string }>(
+          'select role from "user" where id = $1 for share',
+          [course.ownerId],
+        );
+        if (
+          owner.rows[0]?.role !==
+          (course.visibility === "personal" ? "student" : "teacher")
+        )
+          throw new Error(
+            "This account can no longer create this type of course.",
+          );
         // The courses_check constraint requires published_version to be set in
         // the same statement as status='published'. The revision FK is
         // deferrable, so the revision can be inserted immediately afterwards.
@@ -171,10 +196,7 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
             course.updatedAt,
           ],
         );
-        if (
-          course.visibility === "personal" &&
-          course.status === "published"
-        ) {
+        if (course.visibility === "personal" && course.status === "published") {
           await client.query(
             "insert into course_revisions (course_id, version, content) values ($1, $2, $3::jsonb)",
             [course.id, course.version, JSON.stringify(content)],
@@ -275,7 +297,8 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
     },
     async enroll(courseId, studentId) {
       const result = await pool.query(
-        `insert into enrollments (course_id, student_id) select id, $2 from courses where id = $1 and status = 'published' and (visibility = 'cohort' or (visibility = 'personal' and owner_id = $2)) on conflict (course_id, student_id) do update set joined_at = enrollments.joined_at returning course_id`,
+        `with available as (select id from courses where id = $1 and status = 'published' and moderation_status = 'active' and (visibility = 'cohort' or (visibility = 'personal' and owner_id = $2)) for share)
+         insert into enrollments (course_id, student_id) select id, $2 from available on conflict (course_id, student_id) do update set direct_access = true returning course_id`,
         [courseId, studentId],
       );
       if (!result.rowCount)
@@ -283,11 +306,14 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
     },
     async insertSubmission(item) {
       const result = await pool.query(
-        `insert into submissions (id, course_id, course_version, activity_id, student_id, answer, ai_feedback, created_at)
-        select $1, c.id, c.version, $4, $5, $6, $7, $8 from courses c
-        join enrollments e on e.course_id = c.id and e.student_id = $5
-        join course_revisions r on r.course_id = c.id and r.version = c.published_version
-        where c.id = $2 and c.version = $3 and c.status = 'published'
+        `with available as (select id, published_version from courses where id = $2 and status = 'published' and moderation_status = 'active' for share),
+        student as (select id from "user" where id = $5 and role = 'student' for share),
+        direct_grant as (select e.student_id from enrollments e join available c on c.id = e.course_id where e.student_id = $5 and e.direct_access and c.published_version = $3 for share of e),
+        class_grant as (select m.student_id from classroom_members m join classrooms cl on cl.id = m.class_id and cl.status = 'active' join course_assignments a on a.class_id = m.class_id where m.student_id = $5 and a.course_id = $2 and a.course_version = $3 and a.revoked_at is null for share of cl, m, a)
+        insert into submissions (id, course_id, course_version, activity_id, student_id, answer, ai_feedback, created_at)
+        select $1, c.id, r.version, $4, s.id, $6, $7, $8 from available c
+        join course_revisions r on r.course_id = c.id and r.version = $3 cross join student s
+        where (exists(select 1 from direct_grant) or exists(select 1 from class_grant))
         and exists (select 1 from jsonb_array_elements(r.content->'lessons') l cross join lateral jsonb_array_elements(l->'blocks') b where b->>'type' = 'activity' and b->'activity'->>'id' = $4) returning id`,
         [
           item.id,
@@ -308,7 +334,7 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
     },
     async insertFeedback(item) {
       const result = await pool.query(
-        `insert into teacher_feedback (id, course_id, student_id, teacher_id, message, created_at) select $1, c.id, e.student_id, $4, $5, $6 from courses c join enrollments e on e.course_id = c.id and e.student_id = $3 where c.id = $2 and c.owner_id = $4 returning id`,
+        `insert into teacher_feedback (id, course_id, student_id, teacher_id, message, created_at) select $1, c.id, e.student_id, $4, $5, $6 from courses c join enrollments e on e.course_id = c.id and e.student_id = $3 where c.id = $2 and c.owner_id = $4 and (e.direct_access or exists (select 1 from classroom_members m join classrooms cl on cl.id = m.class_id and cl.status = 'active' join course_assignments a on a.class_id = m.class_id where m.student_id = e.student_id and a.course_id = c.id and a.revoked_at is null)) returning id`,
         [
           item.id,
           item.courseId,
@@ -345,10 +371,9 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       // Fall back to the single path stored before history was introduced.
       const legacy = await pool.query<{
         learning_path: LearningPathRecord | null;
-      }>(
-        "select learning_path from learning_profiles where user_id = $1",
-        [ownerId],
-      );
+      }>("select learning_path from learning_profiles where user_id = $1", [
+        ownerId,
+      ]);
       const path = legacy.rows[0]?.learning_path;
       return path && Object.keys(path).length ? path : null;
     },
@@ -378,7 +403,13 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         await client.query("begin");
         await client.query(
           "insert into learning_paths (id, owner_id, title, steps, created_at) values ($1, $2, $3, $4::jsonb, $5)",
-          [path.id, path.ownerId, path.title, JSON.stringify(path.steps), path.createdAt],
+          [
+            path.id,
+            path.ownerId,
+            path.title,
+            JSON.stringify(path.steps),
+            path.createdAt,
+          ],
         );
         await client.query(
           `insert into learning_profiles (user_id, learning_path, updated_at) values ($1, $2::jsonb, now()) on conflict (user_id) do update set learning_path = excluded.learning_path, updated_at = now()`,
@@ -410,7 +441,11 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
     },
     async listGenerationRecords(
       ownerId,
-      options: { kind?: GenerationKind; courseId?: string; limit?: number } = {},
+      options: {
+        kind?: GenerationKind;
+        courseId?: string;
+        limit?: number;
+      } = {},
     ) {
       const conditions = ["owner_id = $1"];
       const values: unknown[] = [ownerId];

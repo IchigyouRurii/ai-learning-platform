@@ -1,13 +1,11 @@
 import "server-only";
-import {
-  administrationFeatures,
-  accountProfileFeatures,
-} from "@/shared/contracts/features";
+import { accountProfileFeatures } from "@/shared/contracts/features";
 import { createReservedService } from "./reserved-service";
+import { createAdministrationService } from "../administration-service";
+import { getAdministrationRepository } from "@/shared/database/administration";
 
-export const administration = createReservedService(
-  "administration",
-  administrationFeatures,
+export const administration = createAdministrationService(
+  getAdministrationRepository,
 );
 export const accountProfiles = createReservedService(
   "accountProfiles",

@@ -1,10 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
-import {
-  getCourseDocumentForAuthor,
-  getCurrentUser,
-} from "@/modules/platform";
+import { getCourseDocumentForAuthor, getCurrentUser } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { Badge, PageHeading } from "@/shared/ui/primitives";
 import { PublishButton } from "../components/publish-button";
@@ -12,9 +9,7 @@ import { PublishButton } from "../components/publish-button";
 export async function TeacherCourseDetail({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (user.role !== "teacher") return <RoleGate expected="teacher" />;
-  const document = await getCourseDocumentForAuthor(user, id).catch(
-    () => null,
-  );
+  const document = await getCourseDocumentForAuthor(user, id).catch(() => null);
   if (!document) notFound();
   const course = document.content;
   return (
@@ -44,6 +39,16 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
           </div>
         }
       />
+      {document.moderationStatus === "withdrawn" && (
+        <section className="panel mb-6" role="status">
+          <Badge tone="amber">Withdrawn from learning</Badge>
+          <p className="mt-2">{document.withdrawalReason}</p>
+          <p className="form-hint">
+            You can review and edit this course. Publishing a revision does not
+            remove the administrator’s withdrawal.
+          </p>
+        </section>
+      )}
       <div className="detail-grid">
         <div>
           {course.lessons.map((lesson, index) => (
@@ -86,9 +91,7 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
                                   }
                                 >
                                   {option.text}
-                                  {question.correctOptionIds.includes(
-                                    option.id,
-                                  )
+                                  {question.correctOptionIds.includes(option.id)
                                     ? " ✓"
                                     : ""}
                                 </li>

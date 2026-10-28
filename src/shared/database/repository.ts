@@ -20,9 +20,13 @@ export interface Repository {
 
 export interface PlatformRepository {
   getWorkspace(actor: User): Promise<Workspace>;
-  findCourse(id: string): Promise<Course | null>;
+  findCourse(id: string, version?: number): Promise<Course | null>;
   getCourseDocument(id: string): Promise<CourseDocument | null>;
-  isEnrolled(courseId: string, studentId: string): Promise<boolean>;
+  isEnrolled(
+    courseId: string,
+    studentId: string,
+    version?: number,
+  ): Promise<boolean>;
   insertCourse(course: Course): Promise<Course>;
   updateCourseDraft(
     courseId: string,

@@ -37,6 +37,8 @@ export type CourseDocument = {
   content: CourseDraft;
   createdAt: string;
   updatedAt: string;
+  moderationStatus?: "active" | "withdrawn";
+  withdrawalReason?: string;
 };
 export type LearningPathStep = {
   courseId: string;

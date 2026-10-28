@@ -6,6 +6,7 @@ import { createLocalPlatformRepository } from "./local-platform-repository";
 import { createNeonRepository } from "./neon-repository";
 import { getDatabasePool } from "./pool";
 import type { PlatformRepository } from "./repository";
+export { getAdministrationRepository } from "./administration";
 
 const runtime = globalThis as typeof globalThis & {
   minicourseLocalPlatform?: PlatformRepository;

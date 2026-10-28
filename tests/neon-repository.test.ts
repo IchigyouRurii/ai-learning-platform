@@ -37,6 +37,9 @@ beforeAll(async () => {
     "202610170001_neon.sql",
     "202610220001_course_editing.sql",
     "202610250001_ai_history.sql",
+    "202610270001_administration.sql",
+    "202610270002_classrooms.sql",
+    "202610270003_admin_classrooms.sql",
   ])
     await postgres.database.exec(
       await readFile(
@@ -201,6 +204,8 @@ describe("Neon SQL repository", () => {
     const paths = await repository.listLearningPaths(student.id);
     expect(paths).toHaveLength(2);
     expect(paths[0].title).toBe("新路径");
-    expect((await repository.getLearningPath(student.id))?.title).toBe("新路径");
+    expect((await repository.getLearningPath(student.id))?.title).toBe(
+      "新路径",
+    );
   });
 });

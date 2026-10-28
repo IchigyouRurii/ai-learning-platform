@@ -41,7 +41,11 @@ export function CourseCatalog({
   type Entry = Pick<
     Course,
     "id" | "title" | "description" | "subject" | "status" | "lessons"
-  > & { preview?: boolean; author?: string };
+  > & {
+    preview?: boolean;
+    author?: string;
+    moderationStatus?: "active" | "withdrawn";
+  };
   const [selection, setSelection] = useState<{
     course: Entry;
     level: string;
@@ -143,9 +147,19 @@ export function CourseCatalog({
                     </span>
                     {creations && (
                       <Badge
-                        tone={course.status === "published" ? "green" : "amber"}
+                        tone={
+                          course.moderationStatus === "withdrawn"
+                            ? "amber"
+                            : course.status === "published"
+                              ? "green"
+                              : "amber"
+                        }
                       >
-                        {course.status === "published" ? "Published" : "Draft"}
+                        {course.moderationStatus === "withdrawn"
+                          ? "Withdrawn"
+                          : course.status === "published"
+                            ? "Published"
+                            : "Draft"}
                       </Badge>
                     )}
                   </div>

@@ -10,6 +10,8 @@ import {
   Route,
   Sparkles,
   Users,
+  BookOpen,
+  School,
 } from "lucide-react";
 import type { Role } from "@/shared/contracts";
 
@@ -17,7 +19,12 @@ export function Navigation({ role }: { role: Role }) {
   const pathname = usePathname();
   const links =
     role === "admin"
-      ? [{ href: "/admin", label: "Admin overview", icon: Users }]
+      ? [
+          { href: "/admin", label: "Platform overview", icon: LayoutGrid },
+          { href: "/admin/users", label: "Users & access", icon: Users },
+          { href: "/admin/courses", label: "Teaching courses", icon: BookOpen },
+          { href: "/admin/classes", label: "Classrooms", icon: School },
+        ]
       : role === "teacher"
         ? [
             { href: "/teacher", label: "Course Marketplace", icon: LayoutGrid },
@@ -26,6 +33,7 @@ export function Navigation({ role }: { role: Role }) {
               label: "My Creations",
               icon: FileText,
             },
+            { href: "/teacher/classes", label: "My Classes", icon: School },
             {
               href: "/teacher/students",
               label: "Teaching Management",
@@ -38,6 +46,7 @@ export function Navigation({ role }: { role: Role }) {
               label: "Course Marketplace",
               icon: GraduationCap,
             },
+            { href: "/student/classes", label: "My Classes", icon: School },
             {
               href: "/student/studio",
               label: "AI Studio",
@@ -58,7 +67,7 @@ export function Navigation({ role }: { role: Role }) {
     <nav className="navigation" aria-label="Primary navigation">
       {links.map(({ href, label, icon: Icon }) => {
         const active =
-          href === "/teacher" || href === "/student"
+          href === "/teacher" || href === "/student" || href === "/admin"
             ? pathname === href
             : pathname.startsWith(href);
         return (

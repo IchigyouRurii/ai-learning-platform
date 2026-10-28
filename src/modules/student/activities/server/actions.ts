@@ -15,6 +15,7 @@ import { gradeQuiz } from "./quiz";
 
 const quizAnswerSchema = z.object({
   courseId: z.string().min(1),
+  courseVersion: z.number().int().positive().optional(),
   activityId: z.string().min(1),
   answers: z
     .array(
@@ -37,6 +38,7 @@ export async function submitQuizAction(
       actor,
       input.courseId,
       input.activityId,
+      input.courseVersion,
     );
     const result = gradeQuiz(activity, input.answers);
     await recordSubmission(actor, {
@@ -56,6 +58,7 @@ export async function submitQuizAction(
 
 const answerSchema = z.object({
   courseId: z.string().min(1),
+  courseVersion: z.number().int().positive().optional(),
   activityId: z.string().min(1),
   answer: z
     .string()
@@ -76,6 +79,7 @@ export async function submitAnswerAction(
       actor,
       input.courseId,
       input.activityId,
+      input.courseVersion,
     );
     const feedback = await evaluateAnswer(
       course,

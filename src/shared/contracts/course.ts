@@ -189,6 +189,8 @@ export type Course = CourseDraft & {
   version: number;
   createdAt: string;
   updatedAt: string;
+  moderationStatus?: "active" | "withdrawn";
+  withdrawalReason?: string;
   /** Local demo only: draft revision counter used for optimistic locking. */
   draftRevision?: number;
   /** Local demo only: immutable published snapshot while the draft changes. */

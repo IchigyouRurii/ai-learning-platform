@@ -18,7 +18,8 @@ export async function StudentLearningPath() {
   ]);
   const courses = workspace.courses
     .filter(
-      (course) => course.status === "published" && course.visibility === "cohort",
+      (course) =>
+        course.status === "published" && course.visibility === "cohort",
     )
     .map((course) => ({
       id: course.id,
@@ -26,7 +27,6 @@ export async function StudentLearningPath() {
       title: course.title,
       subject: course.subject,
       description: course.description,
-      lessons: course.lessons,
     }));
   return (
     <>

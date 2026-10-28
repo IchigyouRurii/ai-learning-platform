@@ -8,7 +8,11 @@ import { runDatabaseTask } from "./common";
 await runDatabaseTask(async (pool) => {
   const client = await pool.connect();
   try {
-    await client.query("select pg_advisory_lock(726522945332)");
+    // A transaction pins a Neon pooler backend. Session advisory locks can
+    // otherwise be leaked or unlocked on a different backend after a query.
+    await client.query("begin");
+    await client.query("set local lock_timeout = '30s'");
+    await client.query("select pg_advisory_xact_lock(726522945332)");
     const auth = createAuth(pool);
     const authMigrations = await getMigrations(auth.options);
     await authMigrations.runMigrations();
@@ -47,25 +51,21 @@ await runDatabaseTask(async (pool) => {
         }
         continue;
       }
-      await client.query("begin");
-      try {
-        await client.query(source);
-        await client.query(
-          "insert into minicourse_migrations (name, checksum) values ($1, $2)",
-          [name, checksum],
-        );
-        await client.query("commit");
-        console.log(`已应用 ${name}`);
-      } catch (error) {
-        await client.query("rollback");
-        throw error;
-      }
+      await client.query(source);
+      await client.query(
+        "insert into minicourse_migrations (name, checksum) values ($1, $2)",
+        [name, checksum],
+      );
+      console.log(`准备应用 ${name}`);
     }
+    await client.query("commit");
     console.log(
       "账号、会话与课程数据库初始化完成。可重复运行，已应用迁移会跳过。",
     );
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
   } finally {
-    await client.query("select pg_advisory_unlock(726522945332)");
     client.release();
   }
 });

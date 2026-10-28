@@ -87,11 +87,12 @@ export function createLocalPlatformRepository(
         ),
       };
     },
-    async findCourse(id) {
+    async findCourse(id, version) {
       const course = (await store.read()).courses.find(
         (item) => item.id === id,
       );
-      if (!course) return null;
+      if (!course || (version !== undefined && course.version !== version))
+        return null;
       return course.status === "published" ? publishedView(course) : course;
     },
     async getCourseDocument(id) {
@@ -100,8 +101,16 @@ export function createLocalPlatformRepository(
       );
       return course ? toDocument(course) : null;
     },
-    async isEnrolled(courseId, studentId) {
-      return (await store.read()).enrollments.some(
+    async isEnrolled(courseId, studentId, version) {
+      const state = await store.read();
+      if (
+        version !== undefined &&
+        !state.courses.some(
+          (course) => course.id === courseId && course.version === version,
+        )
+      )
+        return false;
+      return state.enrollments.some(
         (item) => item.courseId === courseId && item.studentId === studentId,
       );
     },
@@ -112,10 +121,7 @@ export function createLocalPlatformRepository(
           draftRevision: course.draftRevision ?? 1,
         };
         state.courses.unshift(stored);
-        if (
-          stored.visibility === "personal" &&
-          stored.status === "published"
-        ) {
+        if (stored.visibility === "personal" && stored.status === "published") {
           if (
             !state.enrollments.some(
               (item) =>
@@ -132,12 +138,7 @@ export function createLocalPlatformRepository(
         return stored;
       });
     },
-    async updateCourseDraft(
-      courseId,
-      ownerId,
-      expectedDraftRevision,
-      content,
-    ) {
+    async updateCourseDraft(courseId, ownerId, expectedDraftRevision, content) {
       return store.mutate((state) => {
         const course = state.courses.find(
           (item) => item.id === courseId && item.ownerId === ownerId,
@@ -275,7 +276,11 @@ export function createLocalPlatformRepository(
     },
     async listGenerationRecords(
       ownerId,
-      options: { kind?: GenerationKind; courseId?: string; limit?: number } = {},
+      options: {
+        kind?: GenerationKind;
+        courseId?: string;
+        limit?: number;
+      } = {},
     ) {
       return ((await store.read()).generationRecords ?? [])
         .filter(

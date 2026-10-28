@@ -7,7 +7,6 @@ import {
   type Course,
   type CourseDocument,
   type GenerationKind,
-  type GenerationRecord,
   type LearningPathRecord,
   type User,
   type Submission,
@@ -21,17 +20,26 @@ export async function getWorkspace(actor: User) {
   return getRepository().getWorkspace(actor);
 }
 
-async function requireCourse(id: string) {
-  const course = await getRepository().findCourse(id);
-  if (!course) throw new Error("Course not found.");
+async function requireCourse(id: string, version?: number) {
+  const course = await getRepository().findCourse(id, version);
+  if (!course)
+    throw new Error(
+      version === undefined
+        ? "Course not found."
+        : "This course version was not found. Refresh and try again.",
+    );
   return course;
 }
 
 async function requireLearningAccess(actor: User, course: Course) {
   assertStudent(actor);
+  if (course.moderationStatus === "withdrawn")
+    throw new Error(
+      "This course has been withdrawn and is no longer available for learning.",
+    );
   if (course.status !== "published")
     throw new Error("This course has not been published.");
-  if (!(await getRepository().isEnrolled(course.id, actor.id)))
+  if (!(await getRepository().isEnrolled(course.id, actor.id, course.version)))
     throw new Error("Please enroll in this course first.");
 }
 
@@ -121,17 +129,32 @@ export async function enrollCourse(actor: User, id: string) {
   const course = await requireCourse(id);
   const personalOwner =
     course.visibility === "personal" && course.ownerId === actor.id;
-  if (course.status !== "published" || (course.visibility !== "cohort" && !personalOwner))
+  if (
+    course.moderationStatus === "withdrawn" ||
+    course.status !== "published" ||
+    (course.visibility !== "cohort" && !personalOwner)
+  )
     throw new Error("This course is not open for enrollment.");
   await getRepository().enroll(id, actor.id);
+}
+
+export async function getAssignedLearningCourse(
+  actor: User,
+  courseId: string,
+  version: number,
+) {
+  const course = await requireCourse(courseId, version);
+  await requireLearningAccess(actor, course);
+  return course;
 }
 
 export async function getLearningContext(
   actor: User,
   courseId: string,
   activityId: string,
+  version?: number,
 ) {
-  const course = await requireCourse(courseId);
+  const course = await requireCourse(courseId, version);
   await requireLearningAccess(actor, course);
   const activity = getActivities(course).find((item) => item.id === activityId);
   if (!activity)
@@ -143,7 +166,7 @@ export async function recordSubmission(
   actor: User,
   input: Omit<Submission, "id" | "studentId" | "createdAt">,
 ) {
-  const course = await requireCourse(input.courseId);
+  const course = await requireCourse(input.courseId, input.courseVersion);
   await requireLearningAccess(actor, course);
   if (
     course.version !== input.courseVersion ||
