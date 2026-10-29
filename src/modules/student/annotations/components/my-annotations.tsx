@@ -120,9 +120,10 @@ export function MyAnnotations({
     <section className="panel mt-6">
       <div className="panel-heading">
         <div>
-          <h2>My content questions</h2>
+          <h2>My private notes</h2>
           <p className="muted">
-            Private comments to your teacher about specific course content.
+            Private notes to your teacher about specific course content. Only
+            you and your teacher can see them.
           </p>
         </div>
         {unread > 0 && (
@@ -133,8 +134,8 @@ export function MyAnnotations({
       </div>
       {!annotations.length ? (
         <p className="muted">
-          Use <strong>Comment</strong> next to any content block to ask your
-          teacher about it.
+          Use <strong>Private note</strong> next to any content block to ask
+          your teacher about that exact part.
         </p>
       ) : (
         <div className="grid gap-3">

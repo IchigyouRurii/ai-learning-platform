@@ -183,7 +183,12 @@ export function ContentQuestions({
   return (
     <section className="mt-4 border-t border-border pt-4">
       <div className="flex items-center justify-between gap-2">
-        <h3>Content questions</h3>
+        <div>
+          <h3>Private notes</h3>
+          <p className="muted text-sm">
+            Only this student and you can see these notes.
+          </p>
+        </div>
         {openCount > 0 && (
           <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-2 py-1 text-xs font-semibold text-white">
             {openCount} unprocessed

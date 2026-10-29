@@ -51,8 +51,8 @@ content_annotations (
 
 ## 页面
 
-- 学生课程页：每个内容块下有 `Comment` 入口；课程页底部有 `My content questions` 汇总，显示分类、引用、状态、教师回复和学生未读红点；
-- 教师 Teaching Management：每个学生卡片下有 `Content questions` 区块，显示未处理数量、分类/引用/问题、回复框和 Resolve；并提供跳转到课程 Q&A 的链接，方便教师手动发布更正。
+- 学生课程页：每个内容块下有 `Private note` 入口；课程页底部有 `My private notes` 汇总，显示分类、引用、状态、教师回复和学生未读红点；
+- 教师 Teaching Management：每个学生卡片下有 `Private notes` 区块，显示未处理数量、分类/引用/问题、回复框和 Resolve；并提供跳转到课程 Q&A 的链接，方便教师手动发布更正。文案突出“针对具体内容块、仅学生和教师可见”，与公开 Q&A 区分。
 
 ## 代码地图
 

@@ -93,6 +93,12 @@ export async function StudentCourseDetail({ id }: { id: string }) {
           ) : undefined
         }
       />
+      {enrolled && (
+        <p className="form-hint">
+          Private note: ask your teacher about this exact part. Only you and
+          your teacher can see it.
+        </p>
+      )}
       <div className="detail-grid">
         <div>
           {!enrolled ? (

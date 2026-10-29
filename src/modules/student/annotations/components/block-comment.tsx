@@ -54,13 +54,13 @@ export function BlockComment({
     return (
       <Button
         type="button"
-        variant="ghost"
-        size="xs"
+        variant="outline"
+        size="sm"
         className="justify-self-start"
         onClick={openForm}
       >
-        <MessageCirclePlus size={14} />
-        Comment
+        <MessageCirclePlus size={15} />
+        Private note
       </Button>
     );
 
@@ -92,7 +92,7 @@ export function BlockComment({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium">Ask your teacher about this part</p>
+        <p className="text-sm font-medium">Ask about this part</p>
         <Button
           type="button"
           variant="ghost"
