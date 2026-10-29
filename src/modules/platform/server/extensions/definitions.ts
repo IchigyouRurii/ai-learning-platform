@@ -1,6 +1,7 @@
 import {
   accountProfileFeatures,
   administrationFeatures,
+  annotationFeatures,
   classroomFeatures,
   courseManagementFeatures,
   discussionFeatures,
@@ -12,6 +13,7 @@ import {
 } from "@/shared/contracts/features";
 
 export const extensionDefinitions = {
+  annotations: annotationFeatures,
   classrooms: classroomFeatures,
   courseManagement: courseManagementFeatures,
   generation: generationFeatures,

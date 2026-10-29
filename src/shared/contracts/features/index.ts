@@ -1,4 +1,5 @@
 export * from "./common";
+export * from "./annotations";
 export * from "./classrooms";
 export * from "./activities";
 export * from "./courses";

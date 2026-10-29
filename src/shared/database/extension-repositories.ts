@@ -7,6 +7,7 @@ import type {
   Classroom,
   ClassroomInvitation,
   ClassroomMember,
+  ContentAnnotation,
   CourseAssignment,
   CourseEditor,
   CourseQuestion,
@@ -229,6 +230,35 @@ export interface LearningPlanRepository {
   ): Promise<LearningPath>;
 }
 
+export interface AnnotationRepository {
+  create(
+    actor: User,
+    input: CourseVersionRef & {
+      lessonId: string;
+      blockId: string;
+      quote?: string;
+      category: "question" | "unclear" | "possible_error" | "outdated";
+      message: string;
+    },
+  ): Promise<ContentAnnotation | null>;
+  listMine(
+    actor: User,
+    reference: CourseVersionRef,
+    page: PageInput,
+  ): Promise<Page<ContentAnnotation> | null>;
+  listForTeacher(
+    actor: User,
+    filter: PageInput & { courseId?: string; studentId?: string },
+  ): Promise<Page<ContentAnnotation> | null>;
+  reply(
+    actor: User,
+    annotationId: string,
+    message: string,
+  ): Promise<ContentAnnotation | null>;
+  resolve(actor: User, annotationId: string): Promise<ContentAnnotation | null>;
+  markSeen(actor: User, annotationId: string): Promise<boolean>;
+}
+
 export interface DiscussionRepository {
   insertQuestion(
     actor: User,
@@ -367,6 +397,7 @@ export interface InvitationMailerPort {
 }
 
 export interface PlatformExtensionRepositories {
+  annotations: AnnotationRepository;
   classrooms: ClassroomRepository;
   courses: CourseAuthoringRepository;
   learning: LearningRepository;

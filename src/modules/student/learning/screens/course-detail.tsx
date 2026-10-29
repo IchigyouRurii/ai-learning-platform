@@ -6,11 +6,17 @@ import {
   getCurrentUser,
   getWorkspace,
   isCourseManagedByClass,
+  platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { toSafeActivity } from "@/shared/contracts";
 import { Badge, PageHeading, ProgressBar } from "@/shared/ui/primitives";
 import { StudentCourseDiscussion } from "@/modules/student/discussions/screens/course-discussion";
+import { BlockComment } from "@/modules/student/annotations/components/block-comment";
+import {
+  MyAnnotations,
+  type AnnotationContext,
+} from "@/modules/student/annotations/components/my-annotations";
 import { ActivityForm } from "../../activities/components/activity-form";
 import { EnrollButton } from "../../activities/components/enroll-button";
 import { QuizForm } from "../../activities/components/quiz-form";
@@ -41,6 +47,30 @@ export async function StudentCourseDetail({ id }: { id: string }) {
   const lessonPercent = course.lessons.length
     ? Math.round((lessonsDone / course.lessons.length) * 100)
     : 0;
+  const annotationResult = enrolled
+    ? await platformExtensions.annotations.listMine(user, {
+        courseId: course.id,
+        courseVersion: course.version,
+        limit: 100,
+      })
+    : null;
+  const annotations = annotationResult?.ok ? annotationResult.data.items : [];
+  const annotationContext: AnnotationContext = Object.fromEntries(
+    course.lessons.flatMap((lesson) =>
+      lesson.blocks.map((block) => [
+        block.id,
+        {
+          lessonTitle: lesson.title,
+          label:
+            block.type === "text"
+              ? block.body.replace(/\s+/g, " ").slice(0, 80)
+              : block.type === "activity"
+                ? block.activity.title
+                : block.type,
+        },
+      ]),
+    ),
+  );
   return (
     <>
       <Link href="/student" className="back-link">
@@ -119,36 +149,46 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                           )
                       : [];
                   const latest = attempts[0];
-                  return block.type === "text" ? (
-                    <p className="prose-text" key={block.id}>
-                      {block.body}
-                    </p>
-                  ) : block.type === "activity" &&
-                    block.activity.type === "reflection" ? (
-                    <ActivityForm
+                  return (
+                    <div
                       key={block.id}
-                      courseId={course.id}
-                      activity={block.activity}
-                      latest={latest}
-                      history={attempts}
-                    />
-                  ) : block.type === "activity" &&
-                    block.activity.type === "quiz" ? (
-                    <QuizForm
-                      key={block.id}
-                      courseId={course.id}
-                      activity={toSafeActivity(block.activity)}
-                      latest={latest}
-                      history={attempts}
-                    />
-                  ) : (
-                    <div key={block.id} className="activity-preview">
-                      <p>
-                        Renderer not yet available for:
-                        {block.type === "activity"
-                          ? block.activity.type
-                          : block.type}
-                      </p>
+                      data-block-id={block.id}
+                      className="grid gap-2"
+                    >
+                      {block.type === "text" ? (
+                        <p className="prose-text">{block.body}</p>
+                      ) : block.type === "activity" &&
+                        block.activity.type === "reflection" ? (
+                        <ActivityForm
+                          courseId={course.id}
+                          activity={block.activity}
+                          latest={latest}
+                          history={attempts}
+                        />
+                      ) : block.type === "activity" &&
+                        block.activity.type === "quiz" ? (
+                        <QuizForm
+                          courseId={course.id}
+                          activity={toSafeActivity(block.activity)}
+                          latest={latest}
+                          history={attempts}
+                        />
+                      ) : (
+                        <div className="activity-preview">
+                          <p>
+                            Renderer not yet available for:
+                            {block.type === "activity"
+                              ? block.activity.type
+                              : block.type}
+                          </p>
+                        </div>
+                      )}
+                      <BlockComment
+                        courseId={course.id}
+                        courseVersion={course.version}
+                        lessonId={lesson.id}
+                        blockId={block.id}
+                      />
                     </div>
                   );
                 })}
@@ -185,6 +225,13 @@ export async function StudentCourseDetail({ id }: { id: string }) {
           </Link>
         </aside>
       </div>
+      {enrolled && (
+        <MyAnnotations
+          courseId={course.id}
+          annotations={annotations}
+          context={annotationContext}
+        />
+      )}
       {enrolled && (
         <StudentCourseDiscussion
           courseId={course.id}

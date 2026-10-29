@@ -6,7 +6,7 @@
 
 现有登录、教师建课/首次发布、学生加入、开放回答、AI 反馈和教师反馈保留原来的调用入口。已有功能的可运行代码、云端连接测试与完整业务验收分别记录，不能混为一谈。
 
-新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、classrooms 八项、discussions 八项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
+新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、annotations 六项、classrooms 八项、discussions 八项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
 
 ```ts
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -163,6 +163,17 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 
 问题关联课程版本和可选章节。**课程内公开**：已加入课程的学生可以查看该课程全部问题与回答，学生之间可以互相回答；教师只能查看自己课程的全部问题与回答，并可以回答或标记解决；非课程成员不可见。问题与回复都返回作者 `{ id, name, role }`，不暴露账号其他信息。软删除保留作者、时间和线程占位，不物理删除历史；已删除消息不能继续表态。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
 
+### 9. 课件内容批注
+
+合同：`features/annotations.ts`；入口：`extensions/annotations.ts`。
+
+- `create / listMine`：学生在指定发布版本的内容块上写私密批注并读取自己的批注。
+- `listForTeacher`：教师读取自己课程中的批注，可按课程或学生过滤。
+- `reply / resolve`：教师回复或直接解决；一条批注保留一条教师回复。
+- `markSeen`：学生展开看到教师回复后标记已读。
+
+批注按 `courseId + courseVersion + lessonId + blockId` 定位，可选 `quote` 保存选中文字但不做精确高亮。分类为 `Question / Unclear / Possible error / Outdated`，只对学生本人和课程教师可见。教师未处理数按 `status = 'open'` 统计，Reply/Resolve 后消失；学生未读按“教师已回复/解决且 `student_seen_at` 为空”统计，学生展开后消失。详见 [课件内容批注](content-annotations.md)。
+
 ## 需求覆盖矩阵
 
 | 截图条目                             | 当前基础与新增合同                                                          |
@@ -223,4 +234,5 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - 学生历史页展示测验选项、正确答案、解释、反思回答和 AI 反馈；学生班级页显示 quiz 进度。
 - 已被班级绑定的课程禁止学生自助加入；未绑定班级的公开课程仍可自助选课。
 - 讨论区新增软删除和四种表情：作者可删自己的内容；教师不能删学生内容；每条消息每用户一个表情，同表情取消/不同切换；已删除消息不再接受表态；删除后保留作者、时间和线程占位。
-- 相关测试覆盖章节完成、quiz 最好成绩/60% 通过、软删除作者限制、表情切换/取消/计数、班级/讨论区回归。
+- 新增内容批注：学生按内容块留下私密疑问/批注，教师回复或解决；教师未处理数按 `status=open`，学生未读按教师已处理且未展开；分类、引用文字和课程版本均保留。
+- 相关测试覆盖章节完成、quiz 最好成绩/60% 通过、软删除作者限制、表情切换/取消/计数、课件批注权限与已读、班级/讨论区回归。

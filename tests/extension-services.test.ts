@@ -70,6 +70,21 @@ const reference = {
 const generation = { topic: "需求分析", audience: "初学者", goals: "说明需求" };
 const key = "d7b59eb2-2266-4f8b-a0c3-e31b994f24bd";
 const inputs = {
+  annotations: {
+    create: {
+      courseId: "course",
+      courseVersion: 1,
+      lessonId: "lesson",
+      blockId: "block",
+      category: "question",
+      message: "这一段不太理解",
+    },
+    listMine: { courseId: "course", courseVersion: 1 },
+    listForTeacher: {},
+    reply: { annotationId: "annotation", message: "这里可以这样理解" },
+    resolve: { annotationId: "annotation" },
+    markSeen: { annotationId: "annotation" },
+  },
   classrooms: {
     create: { name: "一班", courseId: "course", studentIds: ["student"] },
     get: { classId: "class" },
@@ -237,11 +252,12 @@ describe("reserved service boundaries", () => {
     expect(
       capabilities.filter((item) => item.status === "reserved"),
     ).toHaveLength(reservedCount);
-    expect(implemented).toHaveLength(21);
+    expect(implemented).toHaveLength(27);
     expect(
       implemented.every(
         (item) =>
           item.operation.startsWith("administration.") ||
+          item.operation.startsWith("annotations.") ||
           item.operation.startsWith("classrooms.") ||
           item.operation.startsWith("discussions."),
       ),
