@@ -211,6 +211,8 @@ export async function StudentCourseDetail({ id }: { id: string }) {
             ))}
           </ul>
           <hr />
+          {enrolled ? (
+            <>
           <h3>Learning progress</h3>
           <ProgressBar percent={progress.percent} />
           <p className="muted">
@@ -229,6 +231,25 @@ export async function StudentCourseDetail({ id }: { id: string }) {
           <Link href="/student/progress" className="text-link">
             View learning records and teacher feedback →
           </Link>
+            </>
+          ) : (
+            <>
+              <h3>Course outline</h3>
+              <ol className="grid list-decimal gap-3 pl-5">
+                {course.lessons.map((lesson) => (
+                  <li key={lesson.id}>
+                    <span className="font-medium">{lesson.title}</span>
+                    <p className="form-hint">
+                      {lesson.blocks.filter((block) => block.type === "activity").length} activities
+                    </p>
+                  </li>
+                ))}
+              </ol>
+              <p className="form-hint">
+                Enroll to access lessons and activities and track your learning.
+              </p>
+            </>
+          )}
         </aside>
       </div>
       {enrolled && (
