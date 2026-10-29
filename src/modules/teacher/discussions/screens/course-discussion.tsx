@@ -1,7 +1,13 @@
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
 import type { QuestionThread } from "@/shared/contracts";
 import { DiscussionPanel } from "@/shared/ui/discussions/discussion-panel";
-import { replyQuestionAction, resolveQuestionAction } from "../server/actions";
+import {
+  deleteQuestionAction,
+  deleteReplyAction,
+  replyQuestionAction,
+  resolveQuestionAction,
+  toggleReactionAction,
+} from "../server/actions";
 
 export async function TeacherCourseDiscussion({
   courseId,
@@ -36,6 +42,9 @@ export async function TeacherCourseDiscussion({
       viewer={actor}
       replyAction={replyQuestionAction.bind(null, courseId)}
       resolveAction={resolveQuestionAction.bind(null, courseId)}
+      deleteQuestionAction={deleteQuestionAction.bind(null, courseId)}
+      deleteReplyAction={deleteReplyAction.bind(null, courseId)}
+      toggleReactionAction={toggleReactionAction.bind(null, courseId)}
     />
   );
 }

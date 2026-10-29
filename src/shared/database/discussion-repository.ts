@@ -4,6 +4,8 @@ import type {
   CourseQuestion,
   QuestionReply,
   QuestionThread,
+  ReactionKind,
+  ReactionSummary,
   Role,
   User,
 } from "@/shared/contracts";
@@ -20,6 +22,7 @@ type QuestionRow = {
   studentRole: Role;
   message: string;
   status: "open" | "resolved";
+  deletedAt: Date | string | null;
   createdAt: Date | string;
 };
 
@@ -30,8 +33,18 @@ type ReplyRow = {
   authorName: string;
   authorRole: Role;
   message: string;
+  deletedAt: Date | string | null;
   createdAt: Date | string;
 };
+
+type ReactionRow = {
+  questionId: string | null;
+  replyId: string | null;
+  userId: string;
+  reaction: ReactionKind;
+};
+
+const reactionKinds = ["like", "smile", "confused", "doubt"] as const;
 
 const questionSelection = `
   q.id,
@@ -43,6 +56,7 @@ const questionSelection = `
   author.role as "studentRole",
   q.message,
   q.status,
+  q.deleted_at as "deletedAt",
   q.created_at as "createdAt"
 `;
 
@@ -53,12 +67,14 @@ const replySelection = `
   author.name as "authorName",
   author.role as "authorRole",
   r.message,
+  r.deleted_at as "deletedAt",
   r.created_at as "createdAt"
 `;
 
 const timestamp = (value: Date | string) => new Date(value).toISOString();
 
 function questionFromRow(row: QuestionRow): CourseQuestion {
+  const deletedAt = row.deletedAt ? timestamp(row.deletedAt) : null;
   return {
     id: row.id,
     courseId: row.courseId,
@@ -69,13 +85,16 @@ function questionFromRow(row: QuestionRow): CourseQuestion {
       name: row.studentName,
       role: row.studentRole,
     },
-    message: row.message,
+    message: deletedAt ? "" : row.message,
     status: row.status,
+    deletedAt,
+    reactions: [],
     createdAt: timestamp(row.createdAt),
   };
 }
 
 function replyFromRow(row: ReplyRow): QuestionReply {
+  const deletedAt = row.deletedAt ? timestamp(row.deletedAt) : null;
   return {
     id: row.id,
     questionId: row.questionId,
@@ -84,9 +103,32 @@ function replyFromRow(row: ReplyRow): QuestionReply {
       name: row.authorName,
       role: row.authorRole,
     },
-    message: row.message,
+    message: deletedAt ? "" : row.message,
+    deletedAt,
+    reactions: [],
     createdAt: timestamp(row.createdAt),
   };
+}
+
+function summarizeReactions(
+  rows: ReactionRow[],
+  target: { questionId?: string; replyId?: string },
+  actorId: string,
+): ReactionSummary[] {
+  return reactionKinds.map((reaction) => {
+    const matching = rows.filter(
+      (row) =>
+        row.reaction === reaction &&
+        (target.questionId
+          ? row.questionId === target.questionId
+          : row.replyId === target.replyId),
+    );
+    return {
+      reaction,
+      count: matching.length,
+      reactedByMe: matching.some((row) => row.userId === actorId),
+    };
+  });
 }
 
 async function canViewCourse(
@@ -102,8 +144,7 @@ async function canViewCourse(
     );
     return Boolean(result.rowCount);
   }
-  if (actor.role === "student")
-    return platform.isEnrolled(courseId, actor.id);
+  if (actor.role === "student") return platform.isEnrolled(courseId, actor.id);
   return false;
 }
 
@@ -244,9 +285,26 @@ export function createDiscussionRepository(pool: Pool): DiscussionRepository {
         order by r.created_at asc, r.id asc`,
         [questionId],
       );
+      const reactions = await pool.query<ReactionRow>(
+        `select question_id as "questionId", reply_id as "replyId", user_id as "userId", reaction
+         from discussion_reactions
+         where question_id = $1 or reply_id = any($2::text[])`,
+        [questionId, replies.rows.map((reply) => reply.id)],
+      );
+      const question = {
+        ...questionFromRow(row),
+        reactions: summarizeReactions(reactions.rows, { questionId }, actor.id),
+      };
       return {
-        question: questionFromRow(row),
-        replies: replies.rows.map(replyFromRow),
+        question,
+        replies: replies.rows.map((reply) => ({
+          ...replyFromRow(reply),
+          reactions: summarizeReactions(
+            reactions.rows,
+            { replyId: reply.id },
+            actor.id,
+          ),
+        })),
       } satisfies QuestionThread;
     },
 
@@ -316,6 +374,102 @@ export function createDiscussionRepository(pool: Pool): DiscussionRepository {
         [questionId, actor.id],
       );
       return result.rows[0] ? questionFromRow(result.rows[0]) : null;
+    },
+
+    async deleteQuestion(actor, questionId) {
+      const result = await pool.query(
+        `update discussion_questions
+         set deleted_at = now(), deleted_by = $2
+         where id = $1 and student_id = $2 and deleted_at is null
+         returning id`,
+        [questionId, actor.id],
+      );
+      return Boolean(result.rowCount);
+    },
+
+    async deleteReply(actor, replyId) {
+      const result = await pool.query(
+        `update discussion_replies
+         set deleted_at = now(), deleted_by = $2
+         where id = $1 and author_id = $2 and deleted_at is null
+         returning id`,
+        [replyId, actor.id],
+      );
+      return Boolean(result.rowCount);
+    },
+
+    async toggleReaction(actor, target, reaction) {
+      const targetId = target.questionId ?? target.replyId;
+      if (!targetId) return null;
+      const info = target.questionId
+        ? await pool.query<{
+            courseId: string;
+            deletedAt: Date | string | null;
+          }>(
+            `select course_id as "courseId", deleted_at as "deletedAt"
+             from discussion_questions where id = $1`,
+            [targetId],
+          )
+        : await pool.query<{
+            courseId: string;
+            deletedAt: Date | string | null;
+          }>(
+            `select q.course_id as "courseId",
+                    coalesce(q.deleted_at, r.deleted_at) as "deletedAt"
+             from discussion_replies r
+             join discussion_questions q on q.id = r.question_id
+             where r.id = $1`,
+            [targetId],
+          );
+      const targetInfo = info.rows[0];
+      if (!targetInfo || targetInfo.deletedAt) return null;
+      if (!(await canViewCourse(pool, platform, actor, targetInfo.courseId)))
+        return null;
+
+      const existing = await pool.query<{ reaction: ReactionKind }>(
+        target.questionId
+          ? "select reaction from discussion_reactions where user_id = $1 and question_id = $2"
+          : "select reaction from discussion_reactions where user_id = $1 and reply_id = $2",
+        [actor.id, targetId],
+      );
+      const current = existing.rows[0]?.reaction;
+      if (current === reaction) {
+        await pool.query(
+          target.questionId
+            ? "delete from discussion_reactions where user_id = $1 and question_id = $2"
+            : "delete from discussion_reactions where user_id = $1 and reply_id = $2",
+          [actor.id, targetId],
+        );
+      } else if (current) {
+        await pool.query(
+          target.questionId
+            ? "update discussion_reactions set reaction = $3 where user_id = $1 and question_id = $2"
+            : "update discussion_reactions set reaction = $3 where user_id = $1 and reply_id = $2",
+          [actor.id, targetId, reaction],
+        );
+      } else {
+        const id = randomUUID();
+        await pool.query(
+          target.questionId
+            ? `insert into discussion_reactions (id, question_id, reply_id, user_id, reaction)
+               values ($1, $2, null, $3, $4)
+               on conflict (user_id, question_id) do update set reaction = excluded.reaction`
+            : `insert into discussion_reactions (id, question_id, reply_id, user_id, reaction)
+               values ($1, null, $2, $3, $4)
+               on conflict (user_id, reply_id) do update set reaction = excluded.reaction`,
+          [id, targetId, actor.id, reaction],
+        );
+      }
+
+      const rows = await pool.query<ReactionRow>(
+        target.questionId
+          ? `select question_id as "questionId", reply_id as "replyId", user_id as "userId", reaction
+             from discussion_reactions where question_id = $1`
+          : `select question_id as "questionId", reply_id as "replyId", user_id as "userId", reaction
+             from discussion_reactions where reply_id = $1`,
+        [targetId],
+      );
+      return summarizeReactions(rows.rows, target, actor.id);
     },
   };
 }

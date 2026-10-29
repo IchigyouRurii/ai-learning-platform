@@ -3,8 +3,11 @@ import type { QuestionThread } from "@/shared/contracts";
 import { DiscussionPanel } from "@/shared/ui/discussions/discussion-panel";
 import {
   askQuestionAction,
+  deleteQuestionAction,
+  deleteReplyAction,
   replyQuestionAction,
   resolveQuestionAction,
+  toggleReactionAction,
 } from "../server/actions";
 
 export async function StudentCourseDiscussion({
@@ -44,6 +47,9 @@ export async function StudentCourseDiscussion({
       askAction={askQuestionAction.bind(null, courseId, courseVersion)}
       replyAction={replyQuestionAction.bind(null, courseId)}
       resolveAction={resolveQuestionAction.bind(null, courseId)}
+      deleteQuestionAction={deleteQuestionAction.bind(null, courseId)}
+      deleteReplyAction={deleteReplyAction.bind(null, courseId)}
+      toggleReactionAction={toggleReactionAction.bind(null, courseId)}
     />
   );
 }

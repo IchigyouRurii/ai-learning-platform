@@ -1,6 +1,11 @@
 import { readFile, readdir } from "node:fs/promises";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { Course, User } from "@/shared/contracts";
+import type {
+  Course,
+  ReactionKind,
+  ReactionSummary,
+  User,
+} from "@/shared/contracts";
 import { createDiscussionRepository } from "@/shared/database/discussion-repository";
 import { createNeonRepository } from "@/shared/database/neon-repository";
 import { createSeedState } from "@/shared/database/seed";
@@ -30,6 +35,17 @@ const draft = (): Course => ({
   ownerId: teacher.id,
   status: "draft",
 });
+
+function reactionCount(
+  reactions: ReactionSummary[] | null,
+  kind: ReactionKind,
+) {
+  return reactions?.find((item) => item.reaction === kind)?.count ?? 0;
+}
+
+function reactedByMe(reactions: ReactionSummary[] | null, kind: ReactionKind) {
+  return reactions?.find((item) => item.reaction === kind)?.reactedByMe;
+}
 
 async function seedCourse() {
   await platform.insertCourse(draft());
@@ -262,5 +278,147 @@ describe("course-scoped discussion repository", () => {
         message: "Should not be allowed without a real grant",
       }),
     ).toBeNull();
+  });
+
+  it("soft-deletes only the author's question and keeps the thread", async () => {
+    const question = await discussions.insertQuestion(student, {
+      courseId: "course-1",
+      courseVersion: 1,
+      message: "Delete my question",
+    });
+    const reply = await discussions.insertReply(
+      peer,
+      question!.id,
+      "Reply before deletion",
+    );
+
+    expect(await discussions.deleteQuestion(peer, question!.id)).toBe(false);
+    expect(await discussions.deleteQuestion(teacher, question!.id)).toBe(false);
+    expect(await discussions.deleteQuestion(student, question!.id)).toBe(true);
+
+    const thread = await discussions.getThread(peer, question!.id);
+    expect(thread?.question.deletedAt).not.toBeNull();
+    expect(thread?.question.message).toBe("");
+    expect(thread?.question.author.id).toBe(student.id);
+    expect(thread?.question.createdAt).toBeTruthy();
+    expect(thread?.replies[0]).toMatchObject({
+      id: reply!.id,
+      message: "Reply before deletion",
+    });
+  });
+
+  it("soft-deletes only the author's reply", async () => {
+    const question = await discussions.insertQuestion(student, {
+      courseId: "course-1",
+      courseVersion: 1,
+      message: "Question with a reply",
+    });
+    const reply = await discussions.insertReply(
+      peer,
+      question!.id,
+      "Delete my reply",
+    );
+
+    expect(await discussions.deleteReply(teacher, reply!.id)).toBe(false);
+    expect(await discussions.deleteReply(student, reply!.id)).toBe(false);
+    expect(await discussions.deleteReply(peer, reply!.id)).toBe(true);
+
+    const thread = await discussions.getThread(student, question!.id);
+    expect(thread?.replies[0].deletedAt).not.toBeNull();
+    expect(thread?.replies[0].message).toBe("");
+  });
+
+  it("keeps one reaction per user and switches or removes it", async () => {
+    const question = await discussions.insertQuestion(student, {
+      courseId: "course-1",
+      courseVersion: 1,
+      message: "React to this",
+    });
+
+    const liked = await discussions.toggleReaction(
+      peer,
+      { questionId: question!.id },
+      "like",
+    );
+    expect(reactionCount(liked, "like")).toBe(1);
+    expect(reactedByMe(liked, "like")).toBe(true);
+
+    const removed = await discussions.toggleReaction(
+      peer,
+      { questionId: question!.id },
+      "like",
+    );
+    expect(reactionCount(removed, "like")).toBe(0);
+
+    const smiled = await discussions.toggleReaction(
+      peer,
+      { questionId: question!.id },
+      "smile",
+    );
+    expect(reactionCount(smiled, "smile")).toBe(1);
+
+    const switched = await discussions.toggleReaction(
+      peer,
+      { questionId: question!.id },
+      "confused",
+    );
+    expect(reactionCount(switched, "smile")).toBe(0);
+    expect(reactionCount(switched, "confused")).toBe(1);
+
+    const both = await discussions.toggleReaction(
+      student,
+      { questionId: question!.id },
+      "like",
+    );
+    expect(reactionCount(both, "like")).toBe(1);
+    expect(reactionCount(both, "confused")).toBe(1);
+
+    expect(
+      await discussions.toggleReaction(
+        outsider,
+        { questionId: question!.id },
+        "like",
+      ),
+    ).toBeNull();
+    expect(
+      await discussions.toggleReaction(
+        teacher,
+        { questionId: question!.id },
+        "doubt",
+      ),
+    ).not.toBeNull();
+
+    await discussions.deleteQuestion(student, question!.id);
+    expect(
+      await discussions.toggleReaction(
+        peer,
+        { questionId: question!.id },
+        "like",
+      ),
+    ).toBeNull();
+  });
+
+  it("supports reactions on replies", async () => {
+    const question = await discussions.insertQuestion(student, {
+      courseId: "course-1",
+      courseVersion: 1,
+      message: "React to a reply",
+    });
+    const reply = await discussions.insertReply(
+      peer,
+      question!.id,
+      "Reply target",
+    );
+
+    const reactions = await discussions.toggleReaction(
+      student,
+      { replyId: reply!.id },
+      "like",
+    );
+    expect(reactionCount(reactions, "like")).toBe(1);
+    expect(reactedByMe(reactions, "like")).toBe(true);
+
+    const thread = await discussions.getThread(student, question!.id);
+    expect(reactionCount(thread!.replies[0].reactions, "like")).toBe(1);
   });
 });

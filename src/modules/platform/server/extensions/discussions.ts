@@ -109,6 +109,52 @@ export function createDiscussionService(
         return featureFailure(error);
       }
     },
+
+    async deleteQuestion(actorInput, raw) {
+      try {
+        const actor = requireActor(actorInput);
+        requireRole(actor, discussionFeatures.deleteQuestion.roles);
+        const input = discussionFeatures.deleteQuestion.input.parse(raw);
+        const deleted = await getRepository().deleteQuestion(
+          actor,
+          input.questionId,
+        );
+        if (!deleted) throw inaccessible();
+        return { ok: true, data: { deleted: true } };
+      } catch (error) {
+        return featureFailure(error);
+      }
+    },
+
+    async deleteReply(actorInput, raw) {
+      try {
+        const actor = requireActor(actorInput);
+        requireRole(actor, discussionFeatures.deleteReply.roles);
+        const input = discussionFeatures.deleteReply.input.parse(raw);
+        const deleted = await getRepository().deleteReply(actor, input.replyId);
+        if (!deleted) throw inaccessible();
+        return { ok: true, data: { deleted: true } };
+      } catch (error) {
+        return featureFailure(error);
+      }
+    },
+
+    async toggleReaction(actorInput, raw) {
+      try {
+        const actor = requireActor(actorInput);
+        requireRole(actor, discussionFeatures.toggleReaction.roles);
+        const input = discussionFeatures.toggleReaction.input.parse(raw);
+        const reactions = await getRepository().toggleReaction(
+          actor,
+          { questionId: input.questionId, replyId: input.replyId },
+          input.reaction,
+        );
+        if (!reactions) throw inaccessible();
+        return { ok: true, data: { reactions } };
+      } catch (error) {
+        return featureFailure(error);
+      }
+    },
   };
 }
 

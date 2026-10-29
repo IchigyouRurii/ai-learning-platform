@@ -166,6 +166,9 @@ const inputs = {
     getThread: { questionId: "question" },
     reply: { questionId: "question", message: "可以这样理解" },
     resolve: { questionId: "question" },
+    deleteQuestion: { questionId: "question" },
+    deleteReply: { replyId: "reply" },
+    toggleReaction: { questionId: "question", reaction: "like" },
   },
   administration: {
     getOverview: {},
@@ -234,7 +237,7 @@ describe("reserved service boundaries", () => {
     expect(
       capabilities.filter((item) => item.status === "reserved"),
     ).toHaveLength(reservedCount);
-    expect(implemented).toHaveLength(18);
+    expect(implemented).toHaveLength(21);
     expect(
       implemented.every(
         (item) =>
@@ -243,7 +246,7 @@ describe("reserved service boundaries", () => {
           item.operation.startsWith("discussions."),
       ),
     ).toBe(true);
-    expect(discussionCapabilities).toHaveLength(5);
+    expect(discussionCapabilities).toHaveLength(8);
     expect(
       discussionCapabilities.every((item) => item.status === "implemented"),
     ).toBe(true);

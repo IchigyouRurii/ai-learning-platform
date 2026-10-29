@@ -6,7 +6,7 @@
 
 现有登录、教师建课/首次发布、学生加入、开放回答、AI 反馈和教师反馈保留原来的调用入口。已有功能的可运行代码、云端连接测试与完整业务验收分别记录，不能混为一谈。
 
-新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、classrooms 八项、discussions 五项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
+新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、classrooms 八项、discussions 八项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
 
 ```ts
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -158,8 +158,10 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 
 - `ask / listThreads / getThread`：课程提问、课程问题列表、线程。
 - `reply / resolve`：课程成员回答、提问者或教师标记解决。
+- `deleteQuestion / deleteReply`：作者本人软删除自己的问题/回复；教师不能删除学生内容。
+- `toggleReaction`：课程成员/教师对问题或回复表态，固定 👍 / 😄 / 😕 / 🤨 四种；每个用户对一条消息最多一个表情，同表情取消、不同表情切换。
 
-问题关联课程版本和可选章节。**课程内公开**：已加入课程的学生可以查看该课程全部问题与回答，学生之间可以互相回答；教师只能查看自己课程的全部问题与回答，并可以回答或标记解决；非课程成员不可见。问题与回复都返回作者 `{ id, name, role }`，不暴露账号其他信息。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
+问题关联课程版本和可选章节。**课程内公开**：已加入课程的学生可以查看该课程全部问题与回答，学生之间可以互相回答；教师只能查看自己课程的全部问题与回答，并可以回答或标记解决；非课程成员不可见。问题与回复都返回作者 `{ id, name, role }`，不暴露账号其他信息。软删除保留作者、时间和线程占位，不物理删除历史；已删除消息不能继续表态。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
 
 ## 需求覆盖矩阵
 
@@ -220,4 +222,5 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - `submissions` 新增可空 `score` / `max_score`，quiz 提交保存结构化分数；旧提交为 null，不计入统计。
 - 学生历史页展示测验选项、正确答案、解释、反思回答和 AI 反馈；学生班级页显示 quiz 进度。
 - 已被班级绑定的课程禁止学生自助加入；未绑定班级的公开课程仍可自助选课。
-- 相关测试覆盖章节完成、quiz 最好成绩/60% 通过、班级/讨论区回归。
+- 讨论区新增软删除和四种表情：作者可删自己的内容；教师不能删学生内容；每条消息每用户一个表情，同表情取消/不同切换；已删除消息不再接受表态；删除后保留作者、时间和线程占位。
+- 相关测试覆盖章节完成、quiz 最好成绩/60% 通过、软删除作者限制、表情切换/取消/计数、班级/讨论区回归。

@@ -21,6 +21,8 @@ import type {
   PublishedRevision,
   QuestionReply,
   QuestionThread,
+  ReactionKind,
+  ReactionSummary,
   RoleplaySession,
   StudentDirectoryEntry,
   UserDirectoryEntry,
@@ -245,6 +247,13 @@ export interface DiscussionRepository {
     message: string,
   ): Promise<QuestionReply | null>;
   resolve(actor: User, questionId: string): Promise<CourseQuestion | null>;
+  deleteQuestion(actor: User, questionId: string): Promise<boolean>;
+  deleteReply(actor: User, replyId: string): Promise<boolean>;
+  toggleReaction(
+    actor: User,
+    target: { questionId?: string; replyId?: string },
+    reaction: ReactionKind,
+  ): Promise<ReactionSummary[] | null>;
 }
 
 export type StoredMaterial = LearningMaterial & {
