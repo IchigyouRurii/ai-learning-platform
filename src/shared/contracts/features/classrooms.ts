@@ -12,14 +12,27 @@ import {
 export const classroomSchema = z.object({
   id: idSchema,
   teacherId: idSchema,
+  courseId: idSchema,
+  courseTitle: z.string(),
   name: z.string().min(1).max(100),
   description: z.string().max(2000),
+  memberCount: z.number().int().nonnegative(),
   createdAt: timestampSchema,
 });
 export const classroomMemberSchema = z.object({
   classId: idSchema,
-  student: memberViewSchema,
+  student: memberViewSchema.extend({ email: z.email() }),
   joinedAt: timestampSchema,
+});
+export const studentDirectoryEntrySchema = z.object({
+  id: idSchema,
+  name: z.string(),
+  email: z.email(),
+});
+const studentDirectoryInputSchema = z.strictObject({
+  search: z.string().trim().max(100).default(""),
+  limit: z.number().int().min(1).max(200).default(100),
+  cursor: z.string().min(1).max(500).optional(),
 });
 export const assignmentSchema = z.object({
   id: idSchema,
@@ -44,22 +57,49 @@ export const classroomFeatures = {
     z.strictObject({
       name: z.string().trim().min(1).max(100),
       description: z.string().trim().max(2000).default(""),
+      courseId: idSchema,
+      studentIds: z.array(idSchema).max(500).default([]),
     }),
     classroomSchema,
     ["teacher"],
-    "教师 ID 从会话取得。",
+    "教师 ID 从会话取得；courseId 必须是教师自己已发布、visibility=cohort 的课程；所选学生自动加入班级并写入 enrollments。",
+    "implemented",
+  ),
+  get: feature(
+    classId,
+    classroomSchema,
+    ["teacher", "student"],
+    "教师仅能读取自己拥有的班级，学生仅能读取自己加入的班级。",
+    "implemented",
+  ),
+  deleteClass: feature(
+    classId,
+    z.object({ deleted: z.boolean() }),
+    ["teacher"],
+    ownerPolicy +
+      "只删除班级和成员关系；已写入的公开课程报名和学习记录保留。",
+    "implemented",
   ),
   listMine: feature(
     pageInputSchema,
     pageSchema(classroomSchema),
     ["teacher", "student"],
     "仅自己拥有或加入的班级。",
+    "implemented",
   ),
   listMembers: feature(
     classId,
     z.array(classroomMemberSchema),
     ["teacher"],
     ownerPolicy,
+    "implemented",
+  ),
+  listStudents: feature(
+    studentDirectoryInputSchema,
+    pageSchema(studentDirectoryEntrySchema),
+    ["teacher"],
+    "教师可查看已注册学生名单以便选人入班；只返回 id、name、email，不返回密码或会话。",
+    "implemented",
   ),
   inviteStudents: feature(
     z.strictObject({
@@ -78,7 +118,9 @@ export const classroomFeatures = {
     }),
     z.object({ added: z.array(idSchema), missingEmails: z.array(z.email()) }),
     ["teacher"],
-    ownerPolicy + "仅导入现有学生账号；未知邮箱返回缺失项，不生成默认密码。",
+    ownerPolicy +
+      "仅导入现有学生账号；未知邮箱返回缺失项，不生成默认密码；匹配到的学生同时写入班级所绑定课程的 enrollments。",
+    "implemented",
   ),
   acceptInvitation: feature(
     z.strictObject({ token: z.string().min(20).max(500) }),
@@ -102,7 +144,9 @@ export const classroomFeatures = {
     z.strictObject({ classId: idSchema, studentId: idSchema }),
     z.object({ removed: z.boolean() }),
     ["teacher"],
-    ownerPolicy + "移除后的学习访问按现存授权关系计算，保留历史记录。",
+    ownerPolicy +
+      "只删除班级成员关系；已写入的公开课程报名和学习记录保留。",
+    "implemented",
   ),
   assignCourse: feature(
     z.strictObject({
@@ -124,5 +168,6 @@ export const classroomFeatures = {
 };
 export type Classroom = z.infer<typeof classroomSchema>;
 export type ClassroomMember = z.infer<typeof classroomMemberSchema>;
+export type StudentDirectoryEntry = z.infer<typeof studentDirectoryEntrySchema>;
 export type CourseAssignment = z.infer<typeof assignmentSchema>;
 export type ClassroomInvitation = z.infer<typeof invitationSchema>;

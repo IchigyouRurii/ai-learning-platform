@@ -5,6 +5,7 @@ import {
   getCurrentUser,
   getLearningPath,
   getWorkspace,
+  isCourseManagedByClass,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { CourseCard, PageHeading, StatCard } from "@/shared/ui/primitives";
@@ -15,9 +16,17 @@ export async function StudentCourseList() {
   const workspace = await getWorkspace(user);
   const savedPath = await getLearningPath(user);
   const enrolled = new Set(workspace.enrollments.map((item) => item.courseId));
+  const classManaged = new Set(
+    (
+      await Promise.all(
+        workspace.courses.map(async (course) =>
+          (await isCourseManagedByClass(course.id)) ? course.id : null,
+        ),
+      )
+    ).filter((courseId): courseId is string => courseId !== null),
+  );
   const personal = workspace.courses.filter(
-    (course) =>
-      course.visibility === "personal" && course.ownerId === user.id,
+    (course) => course.visibility === "personal" && course.ownerId === user.id,
   );
   const catalog = workspace.courses.filter(
     (course) => course.visibility !== "personal",
@@ -118,8 +127,10 @@ export async function StudentCourseList() {
                 footer={
                   <span>
                     Personal ·{" "}
-                    {calculateProgress(course, workspace.submissions, user.id)
-                      .percent}
+                    {
+                      calculateProgress(course, workspace.submissions, user.id)
+                        .percent
+                    }
                     % complete
                   </span>
                 }
@@ -148,7 +159,9 @@ export async function StudentCourseList() {
               <span>
                 {enrolled.has(course.id)
                   ? `Enrolled · Completed ${calculateProgress(course, workspace.submissions, user.id).percent}%`
-                  : "Open for enrollment"}
+                  : classManaged.has(course.id)
+                    ? "Managed by your teacher through a class"
+                    : "Open for enrollment"}
               </span>
             }
           />

@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { getCourseDocumentForAuthor, getCurrentUser } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { Badge, PageHeading } from "@/shared/ui/primitives";
+import { TeacherCourseDiscussion } from "@/modules/teacher/discussions/screens/course-discussion";
 import { PublishButton } from "../components/publish-button";
 
 export async function TeacherCourseDetail({ id }: { id: string }) {
@@ -148,6 +149,9 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
           )}
         </aside>
       </div>
+      {document.publishedVersion !== null && (
+        <section id="course-discussions" className="scroll-mt-6"><TeacherCourseDiscussion courseId={id} /></section>
+      )}
     </>
   );
 }

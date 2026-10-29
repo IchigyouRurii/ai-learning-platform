@@ -1,41 +1,54 @@
-# 班级模块交接（2026-10-28）
+# 班级模块（协作者实现已合并）
 
-## 当前代码状态
+状态：2026-10-28 已把 `feat/class-management` 合入 `feat/e-module-integration`；讨论区同时保留。main 中原有的重复班级实现已在 `3d21183` 撤回。
 
-负责人决定优先采用协作者的 `feat/class-management` 实现。当前仅撤回 `4bbaf66` 中重复的班级实现，尚未合并协作者分支。
+## 当前实现
 
-- 移除教师、学生及管理员的班级页面、导航、交互、Server Actions、班级服务与数据库适配器。
-- `shared/contracts/features/classrooms.ts` 和 `platform/server/extensions/classrooms.ts` 恢复到原预留基线。按原规则校验 actor、角色和输入后返回 `NOT_IMPLEMENTED`，不访问数据库。
-- 移除班级指定版本学习入口及班级授权查询，课程学习恢复到当前发布版本；现有提交和发布快照保留。
-- 保留登录、角色权限、AI 课程生成、直接选课、学习记录、教师反馈，以及管理员用户/课程管理和课程下架。
-- 管理员仍阻止把持有班级的教师改成不兼容角色，避免遗失已有班级的所有权。
+- 教师：`My Classes` → 创建班级 → 导入已注册学生 → 绑定一门已发布课程；可编辑班级、移除成员、删除班级。
+- 学生：`My Classes` → 查看自己加入的班级和绑定课程 → 进入课程学习。
+- 合同：`shared/contracts/features/classrooms.ts`；服务：`platform/server/extensions/classrooms.ts`；仓储：`shared/database/classroom-repository.ts`。
+- 当前模型是**一个班级绑定一门课程**（`classrooms.course_id`）。`course_assignments` 表保留，但当前班级 UI 不使用多课程/多版本分配。
+- 邀请码、邮件邀请、管理员班级治理页面未恢复；管理员用户/课程管理和课程下架保留。
+- 教师班级完成度按**测验**统计：每章节单独计算班级完成度；某个 quiz 取最好一次成绩，≥60% 算通过；一章内所有 quiz 都通过才算该章完成；整门课所有 quiz 都通过才算学生完成。教师端不再展示活动/章节完成，章节完成只保留给学生自己做学习定位。
+- 已被班级绑定的课程禁止学生自助加入，学生需要由教师加入班级；没有绑定班级的公开课程仍可通过课程广场自助选课。
+- 移除成员时，如果没有其他 active 班级学习同一课程，该课程 enrollment 的 `direct_access` 设为 false；重新加入时 upsert 为 true。enrollment 行和学习记录保留，不物理删除。
 
-## 数据库保持原状
+## 数据库与迁移
 
-本次不连接或修改共享 Neon，不删除班级、成员、课程、报名、学习记录或审计；不修改或删除已执行的迁移文件，不执行反向迁移。
+- 使用 main 的 `202610270002_classrooms.sql` 和 `202610270003_admin_classrooms.sql` 提供的表结构：`classrooms`、`classroom_members`、`classroom_join_codes`、`classroom_join_attempts`、`course_assignments`，以及 `enrollments.direct_access`。
+- 旧迁移 `202610190001_classrooms.sql` / `202610200001_classroom_course.sql` **没有重新加入仓库**：共享 Neon 已有它们的执行记录，main 的 20261027 迁移也兼容旧结构；重新加入会在已应用新迁移的库上重复建表。新库直接使用 20261027 迁移。
+- 删除班级时，仓储在同一事务内先清理 `classroom_join_codes`、`course_assignments`、`classroom_members`，再删除 `classrooms`；`enrollments` 和学习记录保留。
+- 学习授权仍使用 `enrollments.direct_access=true`。班级创建/导入学生会写入默认 `direct_access=true` 的 enrollment；`direct_access=false` 的历史记录不授予访问。
+- `202610290002_quiz_scores.sql` 给 `submissions` 增加可空 `score` / `max_score`；只有两项都有值时计入测验统计。`202610290001_lesson_completions.sql` 保留学生个人章节完成。
+- 课程下架、删除班级，或移除成员且该学生没有其他 active 班级学习同一课程时，相关学习/讨论访问按现有 SQL 条件失效。
 
-`202610270002_classrooms.sql` 和 `202610270003_admin_classrooms.sql` 保留在迁移目录，作为已发布历史。代码撤回不会撤销它们的数据库结构。
+## 合并时处理的冲突
 
-当前独立选课仍检查 `enrollments.direct_access`。原班级专用报名（`direct_access=false`）仅保留历史，不自动变成永久访问权；学生主动加入公开、已发布且未下架的课程时可取得独立访问。旧协作者实现插入报名时未指定该字段，现有数据库默认值为 true；是否继续采用这种语义由班级负责人明确。
+- `common.ts`：采用协作者的 `FeatureStatus` 泛型版本。
+- `navigation.tsx`：保留 main 的 AI Studio / Learning Path，同时加入班级入口。
+- `extension-services.test.ts`：合并 administration 5 项、classrooms 8 项、discussions 5 项，共 18 项 implemented。
+- 文档：保留 main 的管理员/AI 说明，补充班级实现状态。
+- 迁移：移除协作者的两个 legacy 迁移文件，统一使用 main 的 20261027 班级 schema。
 
-## 协作者合并前的检查
+## 验证
 
-1. 从最新 main 同步并处理契约、导航、仓储导出和文档冲突；以协作者班级实现为准，不恢复第二套实现。
-2. 共享 Neon 已有旧迁移 `202610190001_classrooms.sql` / `202610200001_classroom_course.sql`，以及 20261027 的新迁移。保留所有已执行记录；调整通过新增迁移进行，分别验证已有库和全新库。
-3. 旧分支通过 `classrooms.course_id` 绑定单门课程；当前数据库该列允许为空，历史分配还存于 `course_assignments`。旧查询用内连接课程，不能静默遗漏未绑定课程的班级；需明确处理现有多门/版本分配。
-4. 旧分支直接删除班级；现存 `classroom_join_codes`、`course_assignments` 等表引用班级，需处理外键和历史保留，不能假定只级联删除成员就够用。
-5. 明确保留的 active/archived 状态、邀请码和分配记录如何处理。管理员班级入口已撤回，旧归档数据不会自动恢复或删除。
-6. 检查学生选课、班级加入/移除、学习读取/提交和教师反馈的授权语义；所有学习与写入必须遵守课程下架状态，不能仅隐藏页面按钮。
-7. 协作者分支中的学生完成率是标明的样例数据，不能据此宣称已接入真实学习进度。
-8. 验证教师创建/查看/删除班级、管理学生、学生课程访问、跨角色及跨教师权限、管理员用户/课程功能，再合并。
+- `pnpm check` 通过；班级、讨论区、扩展服务和 quiz progress 测试均通过。
+- `tests/classrooms.test.ts` 覆盖班级创建/删除、成员、课程绑定、越权、事务回滚和历史保留；测试使用嵌入式 PostgreSQL，不连接共享 Neon。
+- 真实 Neon 验收仍需在应用分支上执行 `pnpm db:migrate` 后手工走教师建班、导入学生、学生进入班级和讨论区流程。
 
-## 验证方式
+### Class summary cards
 
-运行 `bash scripts/local.sh check`，测试使用隔离的嵌入式 PostgreSQL，不连接共享 Neon。保留迁移顺序测试和管理员安全测试，班级接口的预留行为由扩展服务测试覆盖。
+The teacher class summary shows member count, students passing all course quizzes
+(click to switch to the percentage), participating students, and awaiting replies.
+Participation means at least one activity/quiz submission in the bound course,
+including historical versions. Awaiting replies counts open course questions
+without a non-deleted teacher reply and open private notes, across versions,
+filtered to current class members. Resolved items are excluded. Counts cover all
+pages; communication lookup failures display Unavailable rather than zero.
 
-### 本次验证记录
-
-- ESLint、类型检查及 14 个测试文件 / 78 项测试通过，覆盖管理员权限、课程下架、预留接口及历史报名不授予访问的行为。
-- 当前执行环境禁止 Turbopack 子进程绑定本地端口；使用 `bash scripts/local.sh build --webpack` 完成生产构建，构建结果中无三端班级路由。
-- 构建时发现教师首页直接导出带 `creations` 参数的业务组件不符合 Next.js 页面参数限制，改为薄页面包装，保持原市场页面行为。
-- 未连接或修改共享 Neon、未调用真实 AI、未提交或推送代码。
+Awaiting reply is clickable and opens a centered accessible dialog. It lists the
+bound course when pending items exist, with separate discussion and private-note
+links. Each class currently binds one course. Discussion links target the course
+Q&A section; private-note links filter Teaching Management by courseId. Empty and
+unavailable states are explicit. Counts remain scoped to current class members;
+destination pages retain their normal course-wide teacher access.

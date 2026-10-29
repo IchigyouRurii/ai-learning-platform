@@ -45,7 +45,7 @@ Neon stores course data and media references. File upload needs a separate objec
 
 ## Complete-scope extension contracts (2026-10-17)
 
-The screenshot scope now has explicit domain schemas and reserved service entry points, rather than relying on future folders or loose JSON fields. `platformExtensions` groups domain services; each domain owns a separate implementation file. The reserved factory validates role and input and always fails with NOT_IMPLEMENTED. It does not perform resource authorization or external IO; those checks are mandatory before a domain is enabled.
+The screenshot scope now has explicit domain schemas and reserved service entry points, rather than relying on future folders or loose JSON fields. `platformExtensions` groups domain services; each domain owns a separate implementation file. The reserved factory validates role and input and always fails with NOT_IMPLEMENTED. It does not perform resource authorization or external IO; those checks are mandatory before a domain is enabled. Discussions is the first enabled domain: its service uses a real Neon repository, parameterized SQL, and course-membership checks; see [discussions](discussions.md).
 
 Course-generation prompts, validation and the existing generation implementation have moved to `src/modules/course-generation/`. Teacher compatibility re-exports remain. Student personal-course and advanced-generation operations are still reserved; shared location does not by itself grant student authoring permission.
 

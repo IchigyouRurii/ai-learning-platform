@@ -1,5 +1,6 @@
 import "server-only";
 import { extensionDefinitions } from "./definitions";
+import { annotations } from "./annotations";
 import { classrooms } from "./classrooms";
 import { courseManagement } from "./courses";
 import { generation } from "./generation";
@@ -10,6 +11,7 @@ import { discussions } from "./discussions";
 import { administration, accountProfiles } from "./administration";
 
 export const platformExtensions = Object.freeze({
+  annotations,
   classrooms,
   courseManagement,
   generation,

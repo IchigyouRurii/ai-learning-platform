@@ -3,6 +3,7 @@ import {
   calculateProgress,
   getCurrentUser,
   getWorkspace,
+  platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import {
@@ -11,6 +12,7 @@ import {
   PageHeading,
   ProgressBar,
 } from "@/shared/ui/primitives";
+import { ContentQuestions } from "@/modules/teacher/annotations/components/content-questions";
 import { FeedbackForm } from "../components/feedback-form";
 import type { Course } from "@/shared/contracts";
 
@@ -60,10 +62,14 @@ function readableAnswer(course: Course, activityId: string, answer: string) {
   }
 }
 
-export async function TeacherStudents() {
+export async function TeacherStudents({ courseId }: { courseId?: string } = {}) {
   const actor = await getCurrentUser();
   if (actor.role !== "teacher") return <RoleGate expected="teacher" />;
-  const workspace = await getWorkspace(actor);
+  const [workspace, annotationPage] = await Promise.all([
+    getWorkspace(actor),
+    platformExtensions.annotations.listForTeacher(actor, { limit: 100, courseId }),
+  ]);
+  const annotations = annotationPage.ok ? annotationPage.data.items : [];
   return (
     <>
       <PageHeading
@@ -71,7 +77,7 @@ export async function TeacherStudents() {
         title="Teaching Management"
         description="Review course participation and submissions, and guide each learner."
       />
-      <div className="inline-note">
+      <div id="private-notes" className="inline-note scroll-mt-6">
         <Users size={17} />
         <span>
           Participation appears here after enrollment. Progress is based on
@@ -84,7 +90,7 @@ export async function TeacherStudents() {
           submissions.
         </EmptyState>
       ) : (
-        workspace.enrollments.map((enrollment) => {
+        workspace.enrollments.filter((enrollment) => !courseId || enrollment.courseId === courseId).map((enrollment) => {
           const course = workspace.courses.find(
             (item) => item.id === enrollment.courseId,
           );
@@ -103,6 +109,27 @@ export async function TeacherStudents() {
             )
             .slice()
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+          const studentAnnotations = annotations.filter(
+            (annotation) =>
+              annotation.courseId === course.id &&
+              annotation.student.id === enrollment.studentId,
+          );
+          const annotationContext = Object.fromEntries(
+            course.lessons.flatMap((lesson) =>
+              lesson.blocks.map((block) => [
+                block.id,
+                {
+                  lessonTitle: lesson.title,
+                  label:
+                    block.type === "text"
+                      ? block.body.replace(/\s+/g, " ").slice(0, 80)
+                      : block.type === "activity"
+                        ? block.activity.title
+                        : block.type,
+                },
+              ]),
+            ),
+          );
           return (
             <section
               className="panel learner-panel"
@@ -159,6 +186,11 @@ export async function TeacherStudents() {
               <FeedbackForm
                 courseId={course.id}
                 studentId={enrollment.studentId}
+              />
+              <ContentQuestions
+                courseId={course.id}
+                annotations={studentAnnotations}
+                context={annotationContext}
               />
             </section>
           );

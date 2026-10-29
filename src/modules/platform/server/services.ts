@@ -119,9 +119,17 @@ export async function publishCourse(actor: User, id: string) {
   return getRepository().publishCourse(id, actor.id);
 }
 
+export async function isCourseManagedByClass(courseId: string) {
+  return getRepository().isCourseManagedByClass(courseId);
+}
+
 export async function enrollCourse(actor: User, id: string) {
   assertStudent(actor);
   const course = await requireCourse(id);
+  if (await getRepository().isCourseManagedByClass(id))
+    throw new Error(
+      "This course is managed by a class. Ask your teacher to add you.",
+    );
   const personalOwner =
     course.visibility === "personal" && course.ownerId === actor.id;
   if (
@@ -131,6 +139,30 @@ export async function enrollCourse(actor: User, id: string) {
   )
     throw new Error("This course is not open for enrollment.");
   await getRepository().enroll(id, actor.id);
+}
+
+export async function completeLesson(
+  actor: User,
+  courseId: string,
+  courseVersion: number,
+  lessonId: string,
+  completed = true,
+) {
+  assertStudent(actor);
+  const course = await requireCourse(courseId);
+  if (course.status !== "published" || course.version !== courseVersion)
+    throw new Error("课程版本已变化，请刷新后重试。");
+  if (!(await getRepository().isEnrolled(courseId, actor.id)))
+    throw new Error("请先加入这门课程。");
+  if (!course.lessons.some((lesson) => lesson.id === lessonId))
+    throw new Error("章节不属于这门课程。");
+  await getRepository().completeLesson(
+    courseId,
+    courseVersion,
+    lessonId,
+    actor.id,
+    completed,
+  );
 }
 
 export async function getLearningContext(

@@ -9,7 +9,7 @@
 | AI 教学、适应背景和目标                            | student activities/learning               | 演示模板；可配置真实模型；长期个性化策略待设计       |
 | 教师手动/AI 修改已有课程                           | teacher course builder                    | 新生成草稿保存前可编辑；已有课程编辑与版本管理待实现 |
 | 根据主题、要求和材料生成课程                       | teacher generation service                | mock 或真实兼容 API，可保存并发布                    |
-| 导入学生、追踪参与                                 | platform enrollments + teacher dashboard  | 自助加入/提交/反馈可演示；批量导入待实现             |
+| 导入学生、追踪参与                                 | classrooms + importStudents + teacher dashboard | 教师可建班（绑定自己已发布的教学课程）、从已注册学生名单加入/移除成员并删除班级，学生自动报名课程并可查看所属班级及自己的班级完成度；班级详情完成率目前为标注 Sample data 的静态示例，真实参与追踪待实现 |
 | 其他学科、自定主题和自学路径                       | subject/audience/goals/visibility         | 数据方向预留；学生建课与路径待实现                   |
 | admin/instructor/student 使用说明                  | docs/deliverables                         | 模板；admin 仅角色类型预留，原文未指定管理功能       |
 | 多原型、访谈、过程证据与个人贡献                   | docs/evidence + GitHub 模板               | 记录结构已提供，需要团队实际完成                     |
@@ -27,4 +27,10 @@
 
 当前技术选择遵循后续用户决定：OpenRouter 免费路由、Neon、Next.js 全栈、shadcn/ui；Server Actions 与 Route Handlers 共同承接服务端适配。截图写的 DeepSeek 不会覆盖用户后来选定的 AI 配置。
 
-本机 Neon 连接、初始化和三个测试账号登录已验收；OpenRouter 基础连接已验收，完整 AI 教学质量仍需验证。新增领域已有数据定义与明确的预留服务/仓储接口，状态仍为未实现。按截图逐条对应的现有/预留能力见 [接口覆盖矩阵](../engineering/feature-contracts.md#需求覆盖矩阵)。
+本机 Neon 连接、初始化和三个测试账号登录已验收；OpenRouter 基础连接已验收，完整 AI 教学质量仍需验证。新增领域已有数据定义与明确的预留服务/仓储接口；除下方班级名单外，其余状态仍为未实现。按截图逐条对应的现有/预留能力见 [接口覆盖矩阵](../engineering/feature-contracts.md#需求覆盖矩阵)。
+
+## 2026-10-19 班级名单
+
+- 教师可创建班级、查看自己的班级、搜索已注册学生并批量加入或移除成员；学生只读查看自己被加入的班级。
+- 实现范围不含邮件邀请、邀请码、学生自助加入、课程分配和参与追踪，这些操作仍为 reserved。
+- 代码与 PGlite 测试已完成；班级迁移尚未应用到云端 Neon，真实账号手工验收待迁移后执行。

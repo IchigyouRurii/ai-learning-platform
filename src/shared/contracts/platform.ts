@@ -15,7 +15,16 @@ export type Submission = {
   studentId: string;
   answer: string;
   aiFeedback: string;
+  score?: number | null;
+  maxScore?: number | null;
   createdAt: string;
+};
+export type LessonCompletionRecord = {
+  courseId: string;
+  courseVersion: number;
+  lessonId: string;
+  studentId: string;
+  completedAt: string;
 };
 export type TeacherFeedback = {
   id: string;
@@ -72,6 +81,7 @@ export type DemoState = {
   enrollments: Enrollment[];
   submissions: Submission[];
   feedback: TeacherFeedback[];
+  lessonCompletions?: LessonCompletionRecord[];
   learningPaths?: LearningPathRecord[];
   generationRecords?: GenerationRecord[];
 };

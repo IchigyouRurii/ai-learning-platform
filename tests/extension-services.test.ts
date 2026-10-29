@@ -7,8 +7,15 @@ import type {
 } from "@/shared/contracts";
 import { createSeedState } from "@/shared/database/seed";
 
-const external = vi.hoisted(() => ({ database: vi.fn(), ai: vi.fn() }));
-vi.mock("@/shared/database", () => ({ getRepository: external.database }));
+const external = vi.hoisted(() => ({
+  database: vi.fn(),
+  classroom: vi.fn(),
+  ai: vi.fn(),
+}));
+vi.mock("@/shared/database", () => ({
+  getRepository: external.database,
+  getClassroomRepository: external.classroom,
+}));
 vi.mock("@/shared/ai/client", () => ({ complete: external.ai }));
 import {
   platformExtensions,
@@ -63,10 +70,28 @@ const reference = {
 const generation = { topic: "需求分析", audience: "初学者", goals: "说明需求" };
 const key = "d7b59eb2-2266-4f8b-a0c3-e31b994f24bd";
 const inputs = {
+  annotations: {
+    create: {
+      courseId: "course",
+      courseVersion: 1,
+      lessonId: "lesson",
+      blockId: "block",
+      category: "question",
+      message: "这一段不太理解",
+    },
+    listMine: { courseId: "course", courseVersion: 1 },
+    listForTeacher: {},
+    reply: { annotationId: "annotation", message: "这里可以这样理解" },
+    resolve: { annotationId: "annotation" },
+    markSeen: { annotationId: "annotation" },
+  },
   classrooms: {
-    create: { name: "一班" },
+    create: { name: "一班", courseId: "course", studentIds: ["student"] },
+    get: { classId: "class" },
+    deleteClass: { classId: "class" },
     listMine: {},
     listMembers: { classId: "class" },
+    listStudents: {},
     inviteStudents: { classId: "class", emails: ["student@example.com"] },
     importStudents: { classId: "class", emails: ["student@example.com"] },
     acceptInvitation: { token: "a".repeat(32) },
@@ -156,6 +181,9 @@ const inputs = {
     getThread: { questionId: "question" },
     reply: { questionId: "question", message: "可以这样理解" },
     resolve: { questionId: "question" },
+    deleteQuestion: { questionId: "question" },
+    deleteReply: { replyId: "reply" },
+    toggleReaction: { questionId: "question", reaction: "like" },
   },
   administration: {
     getOverview: {},
@@ -170,7 +198,7 @@ const actor: User = { id: "actor", name: "测试用户", role: "teacher" };
 
 describe("reserved service boundaries", () => {
   it("has a validated, fail-closed entry point for every declared operation without calling external systems", async () => {
-    let count = 0;
+    let reservedCount = 0;
     for (const [domain, definitions] of Object.entries(extensionDefinitions)) {
       const service = platformExtensions[
         domain as keyof typeof platformExtensions
@@ -194,6 +222,7 @@ describe("reserved service boundaries", () => {
               examples[name],
             ),
           ).toMatchObject({ ok: false, code: "NOT_IMPLEMENTED" });
+          reservedCount++;
         }
         expect(await service[name](null, examples[name])).toMatchObject({
           ok: false,
@@ -206,28 +235,48 @@ describe("reserved service boundaries", () => {
           expect(
             await service[name]({ ...actor, role: denied }, examples[name]),
           ).toMatchObject({ ok: false, code: "FORBIDDEN" });
-        count++;
       }
     }
-    expect(getExtensionCapabilities()).toHaveLength(count);
+    const capabilities = getExtensionCapabilities();
+    const total = Object.values(extensionDefinitions).reduce(
+      (sum, definitions) => sum + Object.keys(definitions).length,
+      0,
+    );
+    const implemented = capabilities.filter(
+      (item) => item.status === "implemented",
+    );
+    const discussionCapabilities = capabilities.filter((item) =>
+      item.operation.startsWith("discussions."),
+    );
+    expect(capabilities).toHaveLength(total);
     expect(
-      getExtensionCapabilities().filter(
-        (item) => item.status === "implemented",
+      capabilities.filter((item) => item.status === "reserved"),
+    ).toHaveLength(reservedCount);
+    expect(implemented).toHaveLength(27);
+    expect(
+      implemented.every(
+        (item) =>
+          item.operation.startsWith("administration.") ||
+          item.operation.startsWith("annotations.") ||
+          item.operation.startsWith("classrooms.") ||
+          item.operation.startsWith("discussions."),
       ),
-    ).toHaveLength(5);
+    ).toBe(true);
+    expect(discussionCapabilities).toHaveLength(8);
     expect(
-      getExtensionCapabilities()
-        .filter((item) => item.status === "implemented")
-        .every((item) => item.operation.startsWith("administration.")),
+      discussionCapabilities.every((item) => item.status === "implemented"),
     ).toBe(true);
     expect(external.database).not.toHaveBeenCalled();
     expect(external.ai).not.toHaveBeenCalled();
   });
-  it("rejects invalid input and authority injection before returning a reserved result", async () => {
+  it("rejects invalid input and authority injection before resolving an operation", async () => {
     expect(
-      await platformExtensions.classrooms.create(actor, { name: "" }),
+      await platformExtensions.classrooms.create(actor, {
+        name: "",
+        courseId: "course",
+      }),
     ).toMatchObject({ ok: false, code: "INVALID_INPUT" });
-    const forged = { name: "一班", teacherId: "other" };
+    const forged = { name: "一班", courseId: "course", teacherId: "other" };
     expect(
       await platformExtensions.classrooms.create(actor, forged),
     ).toMatchObject({ ok: false, code: "INVALID_INPUT" });

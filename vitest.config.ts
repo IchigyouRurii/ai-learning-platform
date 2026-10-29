@@ -10,5 +10,11 @@ export default defineConfig({
       ),
     },
   },
-  test: { environment: "node", include: ["tests/**/*.test.ts"] },
+  test: {
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
+    // Several integration files start embedded PostgreSQL; parallel runs can
+    // exceed the 5s default even when the test itself is correct.
+    testTimeout: 20000,
+  },
 });

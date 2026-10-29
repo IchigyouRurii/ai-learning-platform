@@ -40,8 +40,16 @@ Server Action 返回 `ActionResult<T>`；不把用户身份、课程所有者或
 
 ## 2026-10-17 完整需求扩展
 
-原有服务继续有效。新增领域合同位于 `shared/contracts/features/`，服务端通过 `platformExtensions` 的领域对象调用。所有新增操作目前均为 reserved，返回带 `code` 的 `FeatureResult<T>`，不会访问真实外部服务。详见 [完整功能接口](feature-contracts.md)。
+原有服务继续有效。新增领域合同位于 `shared/contracts/features/`，服务端通过 `platformExtensions` 的领域对象调用。讨论区已启用真实仓储与服务；其余新增操作仍为 reserved，返回带 `code` 的 `FeatureResult<T>`，不会访问真实外部服务。详见 [完整功能接口](feature-contracts.md) 与 [师生问答实现](discussions.md)。
 
 作者数据与学生数据已明确分开：AuthoringDraft 包含评价配置；LearnerCourse/LearnerActivity 只含学习端可见内容。班级分配、路径、进度和答题记录绑定发布版本，草稿更新使用单独的 draftRevision。
 
 领域仓储端口见 `shared/database/extension-repositories.ts`，真实表结构开发规划见 `database/design/README.md`。这些端口尚未接入 Neon，不能把预留字段或声明当作已实现功能。
+
+### Lesson completion toggle
+
+The platform repository and student completion action accept an optional
+`completed` boolean (default `true` for existing callers). Passing `false`
+removes only the current student's completion for the specified course version
+and lesson, with enrollment checks. Repeating either operation is idempotent.
+The course page exposes this as a completion button with an Undo action.

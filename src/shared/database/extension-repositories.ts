@@ -7,6 +7,7 @@ import type {
   Classroom,
   ClassroomInvitation,
   ClassroomMember,
+  ContentAnnotation,
   CourseAssignment,
   CourseEditor,
   CourseQuestion,
@@ -21,7 +22,10 @@ import type {
   PublishedRevision,
   QuestionReply,
   QuestionThread,
+  ReactionKind,
+  ReactionSummary,
   RoleplaySession,
+  StudentDirectoryEntry,
   UserDirectoryEntry,
   GenerationRequest,
   Role,
@@ -33,6 +37,11 @@ import type { pageInputSchema } from "@/shared/contracts/features/common";
 export type PageInput = z.output<typeof pageInputSchema>;
 export type Page<T> = { items: T[]; nextCursor: string | null };
 export type CourseVersionRef = { courseId: string; courseVersion: number };
+export type StudentDirectoryPageInput = {
+  search: string;
+  limit: number;
+  cursor?: string;
+};
 
 // Administration has a Neon implementation; classroom and other extension
 // adapters remain reserved. Every query
@@ -42,11 +51,21 @@ export type CourseVersionRef = { courseId: string; courseVersion: number };
 export interface ClassroomRepository {
   create(
     actor: User,
-    input: { name: string; description: string },
-  ): Promise<Classroom>;
+    input: {
+      name: string;
+      description: string;
+      courseId: string;
+      studentIds: string[];
+    },
+  ): Promise<Classroom | null>;
   findForActor(actor: User, classId: string): Promise<Classroom | null>;
+  deleteClass(actor: User, classId: string): Promise<boolean>;
   listMine(actor: User, page: PageInput): Promise<Page<Classroom>>;
   listMembers(actor: User, classId: string): Promise<ClassroomMember[]>;
+  listStudents(
+    actor: User,
+    page: StudentDirectoryPageInput,
+  ): Promise<Page<StudentDirectoryEntry>>;
   insertInvitations(
     actor: User,
     classId: string,
@@ -79,6 +98,20 @@ export interface ClassroomRepository {
     page: PageInput & { classId?: string },
   ): Promise<Page<CourseAssignment>>;
 }
+
+// Operations currently backed by a real adapter. The remaining classroom ports
+// (invitations, join codes, course assignments) stay reserved until implemented.
+export type ClassroomRosterRepository = Pick<
+  ClassroomRepository,
+  | "create"
+  | "findForActor"
+  | "deleteClass"
+  | "listMine"
+  | "listMembers"
+  | "listStudents"
+  | "importExistingStudents"
+  | "removeMember"
+>;
 
 export interface CourseAuthoringRepository {
   listCatalog(
@@ -197,24 +230,60 @@ export interface LearningPlanRepository {
   ): Promise<LearningPath>;
 }
 
+export interface AnnotationRepository {
+  create(
+    actor: User,
+    input: CourseVersionRef & {
+      lessonId: string;
+      blockId: string;
+      quote?: string;
+      category: "question" | "unclear" | "possible_error" | "outdated";
+      message: string;
+    },
+  ): Promise<ContentAnnotation | null>;
+  listMine(
+    actor: User,
+    reference: CourseVersionRef,
+    page: PageInput,
+  ): Promise<Page<ContentAnnotation> | null>;
+  listForTeacher(
+    actor: User,
+    filter: PageInput & { courseId?: string; studentId?: string },
+  ): Promise<Page<ContentAnnotation> | null>;
+  reply(
+    actor: User,
+    annotationId: string,
+    message: string,
+  ): Promise<ContentAnnotation | null>;
+  resolve(actor: User, annotationId: string): Promise<ContentAnnotation | null>;
+  markSeen(actor: User, annotationId: string): Promise<boolean>;
+}
+
 export interface DiscussionRepository {
   insertQuestion(
     actor: User,
     input: CourseVersionRef & { lessonId?: string; message: string },
-  ): Promise<CourseQuestion>;
+  ): Promise<CourseQuestion | null>;
   listThreads(
     actor: User,
     courseId: string,
     page: PageInput,
     studentId?: string,
-  ): Promise<Page<CourseQuestion>>;
+  ): Promise<Page<CourseQuestion> | null>;
   getThread(actor: User, questionId: string): Promise<QuestionThread | null>;
   insertReply(
     actor: User,
     questionId: string,
     message: string,
-  ): Promise<QuestionReply>;
-  resolve(actor: User, questionId: string): Promise<CourseQuestion>;
+  ): Promise<QuestionReply | null>;
+  resolve(actor: User, questionId: string): Promise<CourseQuestion | null>;
+  deleteQuestion(actor: User, questionId: string): Promise<boolean>;
+  deleteReply(actor: User, replyId: string): Promise<boolean>;
+  toggleReaction(
+    actor: User,
+    target: { questionId?: string; replyId?: string },
+    reaction: ReactionKind,
+  ): Promise<ReactionSummary[] | null>;
 }
 
 export type StoredMaterial = LearningMaterial & {
@@ -328,6 +397,7 @@ export interface InvitationMailerPort {
 }
 
 export interface PlatformExtensionRepositories {
+  annotations: AnnotationRepository;
   classrooms: ClassroomRepository;
   courses: CourseAuthoringRepository;
   learning: LearningRepository;

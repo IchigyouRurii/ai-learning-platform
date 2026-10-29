@@ -23,6 +23,7 @@ export interface PlatformRepository {
   findCourse(id: string): Promise<Course | null>;
   getCourseDocument(id: string): Promise<CourseDocument | null>;
   isEnrolled(courseId: string, studentId: string): Promise<boolean>;
+  isCourseManagedByClass(courseId: string): Promise<boolean>;
   insertCourse(course: Course): Promise<Course>;
   updateCourseDraft(
     courseId: string,
@@ -32,6 +33,13 @@ export interface PlatformRepository {
   ): Promise<CourseDocument>;
   publishCourse(courseId: string, ownerId: string): Promise<Course>;
   enroll(courseId: string, studentId: string): Promise<void>;
+  completeLesson(
+    courseId: string,
+    courseVersion: number,
+    lessonId: string,
+    studentId: string,
+    completed?: boolean,
+  ): Promise<void>;
   insertSubmission(submission: Submission): Promise<Submission>;
   insertFeedback(feedback: TeacherFeedback): Promise<void>;
   getLearningPath(ownerId: string): Promise<LearningPathRecord | null>;

@@ -85,6 +85,11 @@ export function createLocalPlatformRepository(
             ? ids.has(item.courseId)
             : item.studentId === actor.id,
         ),
+        lessonCompletions: (state.lessonCompletions ?? []).filter((item) =>
+          actor.role === "teacher"
+            ? ids.has(item.courseId)
+            : item.studentId === actor.id,
+        ),
       };
     },
     async findCourse(id) {
@@ -104,6 +109,9 @@ export function createLocalPlatformRepository(
       return (await store.read()).enrollments.some(
         (item) => item.courseId === courseId && item.studentId === studentId,
       );
+    },
+    async isCourseManagedByClass() {
+      return false;
     },
     async insertCourse(course) {
       return store.mutate((state) => {
@@ -186,6 +194,54 @@ export function createLocalPlatformRepository(
             studentId,
             joinedAt: new Date().toISOString(),
           });
+      });
+    },
+    async completeLesson(courseId, courseVersion, lessonId, studentId, completed = true) {
+      await store.mutate((state) => {
+        const stored = state.courses.find((item) => item.id === courseId);
+        const course = stored ? publishedView(stored) : undefined;
+        if (
+          !course ||
+          course.status !== "published" ||
+          course.version !== courseVersion
+        )
+          throw new Error("Course version changed. Refresh and try again.");
+        if (
+          !state.enrollments.some(
+            (item) =>
+              item.courseId === courseId && item.studentId === studentId,
+          )
+        )
+          throw new Error("Enroll in this course first.");
+        if (!course.lessons.some((lesson) => lesson.id === lessonId))
+          throw new Error("This lesson does not belong to the course.");
+        if (!completed) {
+          state.lessonCompletions = (state.lessonCompletions ?? []).filter(
+            (item) => !(item.courseId === courseId &&
+              item.courseVersion === courseVersion &&
+              item.lessonId === lessonId && item.studentId === studentId),
+          );
+          return;
+        }
+        const completions = state.lessonCompletions ?? [];
+        if (
+          !completions.some(
+            (item) =>
+              item.courseId === courseId &&
+              item.courseVersion === courseVersion &&
+              item.lessonId === lessonId &&
+              item.studentId === studentId,
+          )
+        ) {
+          completions.push({
+            courseId,
+            courseVersion,
+            lessonId,
+            studentId,
+            completedAt: new Date().toISOString(),
+          });
+          state.lessonCompletions = completions;
+        }
       });
     },
     async insertSubmission(submission) {

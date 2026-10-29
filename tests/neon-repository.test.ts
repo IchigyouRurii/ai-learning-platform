@@ -40,6 +40,8 @@ beforeAll(async () => {
     "202610270001_administration.sql",
     "202610270002_classrooms.sql",
     "202610270003_admin_classrooms.sql",
+    "202610290001_lesson_completions.sql",
+    "202610290002_quiz_scores.sql",
   ])
     await postgres.database.exec(
       await readFile(
@@ -51,7 +53,7 @@ beforeAll(async () => {
 }, 30000);
 beforeEach(async () => {
   await postgres.database.exec(
-    'truncate table "user", courses, course_revisions, enrollments, submissions, teacher_feedback, learning_profiles, generation_jobs cascade',
+    'truncate table "user", courses, course_revisions, enrollments, submissions, teacher_feedback, learning_profiles, generation_jobs, lesson_completions cascade',
   );
   for (const user of [teacher, student, otherStudent])
     await postgres.pool.query(
@@ -110,6 +112,33 @@ describe("Neon SQL repository", () => {
     expect(
       (await repository.getWorkspace(otherStudent)).submissions,
     ).toHaveLength(0);
+  });
+  it("records lesson completion idempotently and scopes it to enrolled students", async () => {
+    await repository.insertCourse(draft());
+    await repository.publishCourse("course-1", teacher.id);
+    await repository.enroll("course-1", student.id);
+    const lessonId = draft().lessons[0].id;
+
+    await repository.completeLesson("course-1", 1, lessonId, student.id);
+    await repository.completeLesson("course-1", 1, lessonId, student.id);
+    expect(
+      (await repository.getWorkspace(student)).lessonCompletions ?? [],
+    ).toHaveLength(1);
+
+    await repository.completeLesson("course-1", 1, lessonId, otherStudent.id, false);
+    expect((await repository.getWorkspace(student)).lessonCompletions).toHaveLength(1);
+    await repository.completeLesson("course-1", 1, lessonId, student.id, false);
+    await repository.completeLesson("course-1", 1, lessonId, student.id, false);
+    expect((await repository.getWorkspace(student)).lessonCompletions).toHaveLength(0);
+    await repository.completeLesson("course-1", 1, lessonId, student.id);
+    expect((await repository.getWorkspace(student)).lessonCompletions).toHaveLength(1);
+
+    await expect(
+      repository.completeLesson("course-1", 1, lessonId, otherStudent.id),
+    ).rejects.toThrow();
+    await expect(
+      repository.completeLesson("course-1", 1, "missing-lesson", student.id),
+    ).rejects.toThrow();
   });
   it("restricts teacher feedback and returns real course member names", async () => {
     await repository.insertCourse(draft());

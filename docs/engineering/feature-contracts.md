@@ -6,7 +6,7 @@
 
 现有登录、教师建课/首次发布、学生加入、开放回答、AI 反馈和教师反馈保留原来的调用入口。已有功能的可运行代码、云端连接测试与完整业务验收分别记录，不能混为一谈。
 
-新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**2026-10-28 保留 administration 五项操作**，详情见 [管理员功能](administration.md)。重复班级实现已撤回，等待协作者 `feat/class-management` 合并，见 [班级交接说明](classrooms.md)。classrooms 和其余扩展操作均为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
+新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、annotations 六项、classrooms 八项、discussions 八项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
 
 ```ts
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -16,18 +16,18 @@ const actor = await getCurrentUser();
 const result = await platformExtensions.classrooms.create(actor, {
   name: "软件工程一班",
 });
-// 班级实现待协作者接入；合法调用当前返回 NOT_IMPLEMENTED。
+// 班级实现已合并；合法调用会访问真实 Neon 仓储。
 ```
 
 这些是模块服务接口，不是已经发布的 HTTP API。后续按页面需要增加薄的 Server Action；外部调用和回调需要 Route Handler。两种适配都应复用同一服务层。
 
 ## 三层合同
 
-| 层        | 文件                                            | 约定                                                                         |
-| --------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| 输入/输出 | `src/shared/contracts/features/*.ts`            | Zod schema、可推导 TS 类型、角色、资源规则、预留状态                         |
-| 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；administration 按操作状态启用，其他预留操作逐项实现        |
-| 存储端口  | `src/shared/database/extension-repositories.ts` | 具名且 actor-scoped 的查询与写入；未来 Neon adapter 必须实现所有权及版本条件 |
+| 层        | 文件                                            | 约定                                                                                             |
+| --------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 输入/输出 | `src/shared/contracts/features/*.ts`            | Zod schema、可推导 TS 类型、角色、资源规则、预留状态                                             |
+| 业务入口  | `src/modules/platform/server/extensions/*.ts`   | 每个领域独立文件；administration、classrooms 与 discussions 按操作状态启用，其他预留操作逐项实现 |
+| 存储端口  | `src/shared/database/extension-repositories.ts` | 具名且 actor-scoped 的查询与写入；未来 Neon adapter 必须实现所有权及版本条件                     |
 
 现有 `PlatformRepository` 不被扩展成一大组假方法。新端口与其并存，逐个领域接入真实 adapter 后启用，避免为了添加类型而破坏现有数据库适配器。
 
@@ -49,7 +49,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 新服务可使用公开导出的 `FeatureServiceError` 表达安全的领域失败，并通过 `featureFailure` 转为结果；未识别的内部错误只返回通用提示，Next.js 重定向/404 控制流会继续抛出。不得用原始 SQL 或模型错误直接构造用户消息。
 
-当前预留入口只做会话 actor 是否存在、角色白名单、输入校验。`resourcePolicy` 是待实现且必须测试的规则，字符串本身不执行授权。入口接入真实逻辑前，必须完成资源查询、服务端授权与 SQL 条件校验，不能简单删掉 NOT_IMPLEMENTED。
+预留入口只做会话 actor 是否存在、角色白名单、输入校验。`resourcePolicy` 是待实现且必须测试的规则，字符串本身不执行授权。入口接入真实逻辑前，必须完成资源查询、服务端授权与 SQL 条件校验，不能简单删掉 NOT_IMPLEMENTED。讨论区已按此要求接入真实仓储，权限条件写在参数化 SQL 中。
 
 ## 按领域的完整操作
 
@@ -71,7 +71,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 合同：`features/classrooms.ts`；入口：`extensions/classrooms.ts`。
 
-- `create / listMine / listMembers`：预留建班、班级列表、教师看名单。
+- `create / listMine / listMembers`：建班、班级列表、教师看名单。
 - `inviteStudents / acceptInvitation`：按邮箱邀请、受邀学生接受邀请。
 - `importStudents`：把已注册学生账号批量加入班级，返回缺失邮箱；不创建密码或冒充已验证邮箱。
 - `createJoinCode / joinByCode`：教师取得短期班级邀请码，学生加入。
@@ -80,7 +80,7 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 `Classroom` → `ClassroomMember` → `CourseAssignment` 为明确的独立关系。原 `Enrollment` 仍表示课程加入，不代替班级成员。当前 visibility=cohort 的历史语义是公开教学课程，不据此推断“属于某班”。班级不自动构成私有课程库；若后续需要班级专属课程，应先扩展可见范围合同。
 
-分配绑定发布版本。学生从安排进入课程时传该版本，不能始终加载最新版。班级名单只对班级教师开放；邀请令牌只有匹配且已验证邮箱的学生能消费。现阶段邮箱验证尚未接入，这项依赖必须先完成；邀请码及邮件邀请操作当前均为预留，等待协作者接入。
+分配绑定发布版本。学生从安排进入课程时传该版本，不能始终加载最新版。班级名单只对班级教师开放；邀请令牌只有匹配且已验证邮箱的学生能消费。现阶段邮箱验证尚未接入，这项依赖必须先完成；邀请码与邮件邀请仍为预留，当前通过导入已注册学生加入班级。
 
 ### 3. 课程创建、编辑、发布与个人自学
 
@@ -126,6 +126,8 @@ const result = await platformExtensions.classrooms.create(actor, {
 
 章节完成、活动提交、测验成绩为三个独立指标。重复尝试保存历史，进度按活动去重，成绩默认取该版本该活动的最近一次有效评分，不把多次得分相加；角色扮演结束计为该活动参与完成。学习记录均带 courseVersion。评分结果须满足 0 ≤ score ≤ maxScore，未评分两者都为 null。
 
+**当前实现：** 章节完成已通过 `PlatformRepository.completeLesson` 和 `lesson_completions` 表接入学生课程页与教师班级进度；`platformExtensions.learning` 仍是 reserved，不能把两者混为一谈。活动提交和测验历史继续使用现有 `submissions`，学生历史页已展示选项、正确答案、解释和 AI 反馈。
+
 提交和发送对话带 idempotencyKey。实现时同一用户+同一操作+key 幂等；同 key 不同内容返回 CONFLICT。角色扮演消息的角色、对话历史和 AI 回复不能由客户端伪造。
 
 coding、simulation、game 已有题面/回答的基础结构，执行、模拟和计分规则仍需各自实现。代码执行必须由独立沙箱服务承接，不能在 Next.js 服务器执行学生代码。
@@ -154,10 +156,23 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 
 合同：`features/discussions.ts`；入口：`extensions/discussions.ts`。
 
-- `ask / listThreads / getThread`：课程提问、本人的问题列表、线程。
-- `reply / resolve`：课程教师回复、提问者或教师标记解决。
+- `ask / listThreads / getThread`：课程提问、课程问题列表、线程。
+- `reply / resolve`：课程成员回答、提问者或教师标记解决。
+- `deleteQuestion / deleteReply`：作者本人软删除自己的问题/回复；教师不能删除学生内容。
+- `toggleReaction`：课程成员/教师对问题或回复表态，固定 👍 / 😄 / 😕 / 🤨 四种；每个用户对一条消息最多一个表情，同表情取消、不同表情切换。
 
-问题关联课程版本和可选章节；学生仅能查看自己的问题，教师仅查看本人课程成员的问题。默认不向全班公开。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
+问题关联课程版本和可选章节。**课程内公开**：已加入课程的学生可以查看该课程全部问题与回答，学生之间可以互相回答；教师只能查看自己课程的全部问题与回答，并可以回答或标记解决；非课程成员不可见。问题与回复都返回作者 `{ id, name, role }`，不暴露账号其他信息。软删除保留作者、时间和线程占位，不物理删除历史；已删除消息不能继续表态。个人自学课程没有自动绑定教师。现有 TeacherFeedback 继续表示教师针对学习记录的建议，不代替问答线程。
+
+### 9. 课件内容批注
+
+合同：`features/annotations.ts`；入口：`extensions/annotations.ts`。
+
+- `create / listMine`：学生在指定发布版本的内容块上写私密批注并读取自己的批注。
+- `listForTeacher`：教师读取自己课程中的批注，可按课程或学生过滤。
+- `reply / resolve`：教师回复或直接解决；一条批注保留一条教师回复。
+- `markSeen`：学生展开看到教师回复后标记已读。
+
+批注按 `courseId + courseVersion + lessonId + blockId` 定位，可选 `quote` 保存选中文字但不做精确高亮。分类为 `Question / Unclear / Possible error / Outdated`，只对学生本人和课程教师可见。教师未处理数按 `status = 'open'` 统计，Reply/Resolve 后消失；学生未读按“教师已回复/解决且 `student_seen_at` 为空”统计，学生展开后消失。详见 [课件内容批注](content-annotations.md)。
 
 ## 需求覆盖矩阵
 
@@ -167,7 +182,7 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 | 平台 2：角色权限                     | 原会话与角色检查 + 每项 feature 的 roles/resourcePolicy                     |
 | 平台 3：导航工作台                   | 原两端工作台 + classrooms.listMine/listAssignments + learningPaths.listMine |
 | 平台 4：课程浏览                     | 原课程页面 + courseManagement.listCatalog + 安全活动投影                    |
-| 平台 5：管理员                       | administration 用户/课程管理接口；班级待接入                                |
+| 平台 5：管理员                       | administration 用户/课程管理接口；班级由协作者实现接入                      |
 | 生成 1：主题、目标、背景、难度、材料 | generationRequestSchema + materials                                         |
 | 生成 2：大纲、章节、互动测验         | AuthoringDraft + 活动配置 + generation.generateDraft                        |
 | 生成 3：结构校验、网页呈现           | Zod schemas + 现有文本 renderer；其他 renderer 由学生流程实现               |
@@ -202,3 +217,22 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - ESLint、TypeScript 通过。在不含 `.env` 的隔离源代码副本中完成 Next.js 生产构建（Webpack），未覆盖正在运行的开发服务产物。
 - 没有执行新 Neon 迁移、创建业务数据、调用真实 AI、发送邀请邮件或上传材料。
 - 本次未实现班级、个人建课、上传、测验、路径、问答或管理页面；资源级授权规则是实施要求，尚未接入真实仓储。
+
+## 本次验证记录（2026-10-19）
+
+- 启用讨论区：新增 `discussion_questions`、`discussion_replies` 两张表及 `202610190001_discussions.sql`。
+- 讨论区改为**课程内公开**：已加入课程的学生可查看并回答该课程全部问题；教师仅可查看自己课程并回答/解决；非课程成员不可见。问题和回复返回作者姓名与角色。
+- `platformExtensions.discussions` 由预留工厂替换为真实服务；仓储权限条件写在参数化 SQL 中，覆盖课程成员、课程所有者、提问者/教师解决、版本与章节校验。
+- 新增 pglite 集成测试，覆盖非成员不可见、跨教师不可见、学生互相回答、解决权限、旧版本和未知章节。`pnpm lint`、`pnpm typecheck`、`pnpm test` 通过（11 个测试文件、57 项测试）。
+- 已在 Neon 分支 `discussions-dev` 执行迁移并完成浏览器手工验收；主库尚未迁移，部署前须在主库执行迁移。
+
+## 本次验证记录（2026-10-29）
+
+- 新增 `lesson_completions` 表与 `PlatformRepository.completeLesson`，学生课程页可标记章节完成，进度按学生/课程/版本/章节幂等记录。
+- 教师班级详情改为按 quiz 统计：每章节单独计算班级完成度，quiz 取最好一次 ≥60% 为通过，一章内全部 quiz 通过才算该章完成，整门课全部 quiz 通过才算学生完成；教师端不再展示活动/章节完成。
+- `submissions` 新增可空 `score` / `max_score`，quiz 提交保存结构化分数；旧提交为 null，不计入统计。
+- 学生历史页展示测验选项、正确答案、解释、反思回答和 AI 反馈；学生班级页显示 quiz 进度。
+- 已被班级绑定的课程禁止学生自助加入；未绑定班级的公开课程仍可自助选课。
+- 讨论区新增软删除和四种表情：作者可删自己的内容；教师不能删学生内容；每条消息每用户一个表情，同表情取消/不同切换；已删除消息不再接受表态；删除后保留作者、时间和线程占位。
+- 新增内容批注：学生按内容块留下私密疑问/批注，教师回复或解决；教师未处理数按 `status=open`，学生未读按教师已处理且未展开；分类、引用文字和课程版本均保留。
+- 相关测试覆盖章节完成、quiz 最好成绩/60% 通过、软删除作者限制、表情切换/取消/计数、课件批注权限与已读、班级/讨论区回归。
