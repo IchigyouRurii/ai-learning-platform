@@ -208,11 +208,7 @@ export function createNeonClassroomRepository(
              order by c.created_at desc, c.id desc limit $2 offset $3`,
         [actor.id, page.limit + 1, offset],
       );
-      return pageResult(
-        result.rows.map(classroomFromRow),
-        page.limit,
-        offset,
-      );
+      return pageResult(result.rows.map(classroomFromRow), page.limit, offset);
     },
     async listMembers(actor, classId) {
       const result = await pool.query<MemberRow>(
@@ -224,18 +220,16 @@ export function createNeonClassroomRepository(
          order by m.joined_at, u.name`,
         [classId, actor.id],
       );
-      return result.rows.map(
-        (row): ClassroomMember => ({
-          classId: row.class_id,
-          student: {
-            id: row.id,
-            name: row.name,
-            role: row.role,
-            email: row.email,
-          },
-          joinedAt: timestamp(row.joined_at),
-        }),
-      );
+      return result.rows.map((row): ClassroomMember => ({
+        classId: row.class_id,
+        student: {
+          id: row.id,
+          name: row.name,
+          role: row.role,
+          email: row.email,
+        },
+        joinedAt: timestamp(row.joined_at),
+      }));
     },
     async listStudents(actor, page: StudentDirectoryPageInput) {
       const offset = offsetFromCursor(page.cursor);
@@ -251,7 +245,9 @@ export function createNeonClassroomRepository(
       return pageResult(result.rows, page.limit, offset);
     },
     async importExistingStudents(actor, classId, emails) {
-      const normalized = [...new Set(emails.map((item) => item.trim().toLowerCase()))];
+      const normalized = [
+        ...new Set(emails.map((item) => item.trim().toLowerCase())),
+      ];
       const client = await pool.connect();
       try {
         await client.query("begin");
@@ -302,6 +298,9 @@ export function createNeonClassroomRepository(
       }
     },
     async removeMember(actor, classId, studentId) {
+      // Removing class membership revokes class-derived direct_access for this
+      // course unless the student is still in another active class for it.
+      // Enrollment and learning history rows are retained.
       const client = await pool.connect();
       try {
         await client.query("begin");

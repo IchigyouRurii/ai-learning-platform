@@ -11,6 +11,7 @@
 - 邀请码、邮件邀请、管理员班级治理页面未恢复；管理员用户/课程管理和课程下架保留。
 - 教师班级完成度按**测验**统计：每章节单独计算班级完成度；某个 quiz 取最好一次成绩，≥60% 算通过；一章内所有 quiz 都通过才算该章完成；整门课所有 quiz 都通过才算学生完成。教师端不再展示活动/章节完成，章节完成只保留给学生自己做学习定位。
 - 已被班级绑定的课程禁止学生自助加入，学生需要由教师加入班级；没有绑定班级的公开课程仍可通过课程广场自助选课。
+- 移除成员时，如果没有其他 active 班级学习同一课程，该课程 enrollment 的 `direct_access` 设为 false；重新加入时 upsert 为 true。enrollment 行和学习记录保留，不物理删除。
 
 ## 数据库与迁移
 
@@ -19,7 +20,7 @@
 - 删除班级时，仓储在同一事务内先清理 `classroom_join_codes`、`course_assignments`、`classroom_members`，再删除 `classrooms`；`enrollments` 和学习记录保留。
 - 学习授权仍使用 `enrollments.direct_access=true`。班级创建/导入学生会写入默认 `direct_access=true` 的 enrollment；`direct_access=false` 的历史记录不授予访问。
 - `202610290002_quiz_scores.sql` 给 `submissions` 增加可空 `score` / `max_score`；只有两项都有值时计入测验统计。`202610290001_lesson_completions.sql` 保留学生个人章节完成。
-- 课程下架、删除班级后，相关学习/讨论访问按现有 SQL 条件失效。
+- 课程下架、删除班级，或移除成员且该学生没有其他 active 班级学习同一课程时，相关学习/讨论访问按现有 SQL 条件失效。
 
 ## 合并时处理的冲突
 
