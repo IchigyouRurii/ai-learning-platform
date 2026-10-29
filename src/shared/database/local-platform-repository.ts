@@ -196,7 +196,7 @@ export function createLocalPlatformRepository(
           });
       });
     },
-    async completeLesson(courseId, courseVersion, lessonId, studentId) {
+    async completeLesson(courseId, courseVersion, lessonId, studentId, completed = true) {
       await store.mutate((state) => {
         const stored = state.courses.find((item) => item.id === courseId);
         const course = stored ? publishedView(stored) : undefined;
@@ -215,6 +215,14 @@ export function createLocalPlatformRepository(
           throw new Error("Enroll in this course first.");
         if (!course.lessons.some((lesson) => lesson.id === lessonId))
           throw new Error("This lesson does not belong to the course.");
+        if (!completed) {
+          state.lessonCompletions = (state.lessonCompletions ?? []).filter(
+            (item) => !(item.courseId === courseId &&
+              item.courseVersion === courseVersion &&
+              item.lessonId === lessonId && item.studentId === studentId),
+          );
+          return;
+        }
         const completions = state.lessonCompletions ?? [];
         if (
           !completions.some(

@@ -146,6 +146,7 @@ export async function completeLesson(
   courseId: string,
   courseVersion: number,
   lessonId: string,
+  completed = true,
 ) {
   assertStudent(actor);
   const course = await requireCourse(courseId);
@@ -160,6 +161,7 @@ export async function completeLesson(
     courseVersion,
     lessonId,
     actor.id,
+    completed,
   );
 }
 

@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   ListChecks,
   Users,
 } from "lucide-react";
@@ -31,6 +29,8 @@ import {
 } from "@/shared/ui/primitives";
 import { DeleteClassButton } from "../components/delete-class-button";
 import { RemoveMemberButton } from "../components/remove-member-button";
+import { AwaitingReplySummary } from "../components/awaiting-reply-summary";
+import { PassSummary } from "../components/pass-summary";
 import { StudentPicker } from "../components/student-picker";
 
 const dateLabel = (value: string) =>
@@ -115,22 +115,44 @@ export async function TeacherClassDetail({
     ? course.lessons.filter((lesson) => quizIdsForLesson(lesson).length).length
     : 0;
   const completedStudents = rows.filter((row) => row.quiz?.completed).length;
-  const averageChapterPercent = rows.length
-    ? Math.round(
-        (rows.reduce((sum, row) => {
-          if (!row.quiz || row.quiz.lessonsWithQuizzes === 0) return sum;
-          return sum + row.quiz.passedLessons / row.quiz.lessonsWithQuizzes;
-        }, 0) /
-          rows.length) *
-          100,
-      )
-    : 0;
-  const needsAttention = rows.filter(
-    (row) =>
-      row.quiz &&
-      row.quiz.lessonsWithQuizzes > 0 &&
-      row.quiz.passedQuizzes === 0,
-  ).length;
+  const memberIds = new Set(members.map((member) => member.student.id));
+  const participating = new Set(
+    workspace.submissions.filter((submission) =>
+      submission.courseId === classroom.courseId &&
+      memberIds.has(submission.studentId),
+    ).map((submission) => submission.studentId),
+  ).size;
+  // Count all pages, retaining the course's access checks and current class scope.
+  let pendingQuestions = 0;
+  let pendingNotes = 0;
+  let communicationAvailable = true;
+  let cursor: string | undefined;
+  do {
+    const page = await platformExtensions.discussions.listThreads(user, {
+      courseId: classroom.courseId, limit: 100, cursor,
+    });
+    if (!page.ok) { communicationAvailable = false; break; }
+    const threads = await Promise.all(page.data.items.filter((question) =>
+      memberIds.has(question.author.id) && question.status === "open" && !question.deletedAt,
+    ).map((question) => platformExtensions.discussions.getThread(user, { questionId: question.id })));
+    for (const thread of threads) {
+      if (!thread.ok) { communicationAvailable = false; continue; }
+      if (!thread.data.replies.some((reply) => reply.author.role === "teacher" && !reply.deletedAt))
+        pendingQuestions++;
+    }
+    cursor = page.data.nextCursor ?? undefined;
+  } while (cursor);
+  cursor = undefined;
+  do {
+    const page = await platformExtensions.annotations.listForTeacher(user, {
+      courseId: classroom.courseId, limit: 100, cursor,
+    });
+    if (!page.ok) { communicationAvailable = false; break; }
+    pendingNotes += page.data.items.filter((note) =>
+      memberIds.has(note.student.id) && note.status === "open",
+    ).length;
+    cursor = page.data.nextCursor ?? undefined;
+  } while (cursor);
   const chapterStats = course
     ? course.lessons.flatMap((lesson) => {
         const quizIds = quizIdsForLesson(lesson);
@@ -216,23 +238,19 @@ export async function TeacherClassDetail({
           detail="Current class members"
           icon={<Users size={17} />}
         />
+        <PassSummary passed={completedStudents} total={members.length} />
         <StatCard
-          label="Completed students"
-          value={`${completedStudents} / ${members.length}`}
-          detail="Passed every chapter quiz"
-          icon={<CheckCircle2 size={17} />}
-        />
-        <StatCard
-          label="Average chapter completion"
-          value={`${averageChapterPercent}%`}
-          detail="Based on quiz passes"
+          label="Participating students"
+          value={participating}
+          detail={`${members.length - participating} not started · Submitted an activity or quiz`}
           icon={<ListChecks size={17} />}
         />
-        <StatCard
-          label="Needs attention"
-          value={needsAttention}
-          detail="No quiz passed yet"
-          icon={<AlertTriangle size={17} />}
+        <AwaitingReplySummary
+          courseId={classroom.courseId}
+          courseTitle={classroom.courseTitle}
+          questions={pendingQuestions}
+          notes={pendingNotes}
+          available={communicationAvailable}
         />
       </section>
       <div className="detail-grid">

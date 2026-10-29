@@ -34,3 +34,20 @@
 - `pnpm check` 通过；班级、讨论区、扩展服务和 quiz progress 测试均通过。
 - `tests/classrooms.test.ts` 覆盖班级创建/删除、成员、课程绑定、越权、事务回滚和历史保留；测试使用嵌入式 PostgreSQL，不连接共享 Neon。
 - 真实 Neon 验收仍需在应用分支上执行 `pnpm db:migrate` 后手工走教师建班、导入学生、学生进入班级和讨论区流程。
+
+### Class summary cards
+
+The teacher class summary shows member count, students passing all course quizzes
+(click to switch to the percentage), participating students, and awaiting replies.
+Participation means at least one activity/quiz submission in the bound course,
+including historical versions. Awaiting replies counts open course questions
+without a non-deleted teacher reply and open private notes, across versions,
+filtered to current class members. Resolved items are excluded. Counts cover all
+pages; communication lookup failures display Unavailable rather than zero.
+
+Awaiting reply is clickable and opens a centered accessible dialog. It lists the
+bound course when pending items exist, with separate discussion and private-note
+links. Each class currently binds one course. Discussion links target the course
+Q&A section; private-note links filter Teaching Management by courseId. Empty and
+unavailable states are explicit. Counts remain scoped to current class members;
+destination pages retain their normal course-wide teacher access.

@@ -9,6 +9,7 @@ export async function completeLessonAction(
   courseId: string,
   courseVersion: number,
   lessonId: string,
+  completed = true,
 ): Promise<ActionResult<null>> {
   try {
     await completeLesson(
@@ -16,6 +17,7 @@ export async function completeLessonAction(
       courseId,
       courseVersion,
       lessonId,
+      completed,
     );
     revalidatePath(`/student/courses/${courseId}`);
     revalidatePath("/student/progress");

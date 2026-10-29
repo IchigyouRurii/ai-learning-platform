@@ -38,6 +38,7 @@ export interface PlatformRepository {
     courseVersion: number,
     lessonId: string,
     studentId: string,
+    completed?: boolean,
   ): Promise<void>;
   insertSubmission(submission: Submission): Promise<Submission>;
   insertFeedback(feedback: TeacherFeedback): Promise<void>;

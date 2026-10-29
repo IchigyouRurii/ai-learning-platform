@@ -352,7 +352,20 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         );
       return item;
     },
-    async completeLesson(courseId, courseVersion, lessonId, studentId) {
+    async completeLesson(courseId, courseVersion, lessonId, studentId, completed = true) {
+      if (!completed) {
+        await pool.query(
+          `delete from lesson_completions lc
+           using courses c, enrollments e
+           where lc.course_id = c.id and e.course_id = c.id
+             and e.student_id = $4 and e.direct_access
+             and c.status = 'published' and c.moderation_status = 'active'
+             and lc.course_id = $1 and lc.course_version = $2
+             and lc.lesson_id = $3 and lc.student_id = $4`,
+          [courseId, courseVersion, lessonId, studentId],
+        );
+        return;
+      }
       const result = await pool.query(
         `insert into lesson_completions (student_id, course_id, course_version, lesson_id)
          select $4, c.id, r.version, $3

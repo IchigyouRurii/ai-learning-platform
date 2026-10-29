@@ -125,6 +125,14 @@ describe("Neon SQL repository", () => {
       (await repository.getWorkspace(student)).lessonCompletions ?? [],
     ).toHaveLength(1);
 
+    await repository.completeLesson("course-1", 1, lessonId, otherStudent.id, false);
+    expect((await repository.getWorkspace(student)).lessonCompletions).toHaveLength(1);
+    await repository.completeLesson("course-1", 1, lessonId, student.id, false);
+    await repository.completeLesson("course-1", 1, lessonId, student.id, false);
+    expect((await repository.getWorkspace(student)).lessonCompletions).toHaveLength(0);
+    await repository.completeLesson("course-1", 1, lessonId, student.id);
+    expect((await repository.getWorkspace(student)).lessonCompletions).toHaveLength(1);
+
     await expect(
       repository.completeLesson("course-1", 1, lessonId, otherStudent.id),
     ).rejects.toThrow();

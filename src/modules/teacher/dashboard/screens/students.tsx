@@ -62,12 +62,12 @@ function readableAnswer(course: Course, activityId: string, answer: string) {
   }
 }
 
-export async function TeacherStudents() {
+export async function TeacherStudents({ courseId }: { courseId?: string } = {}) {
   const actor = await getCurrentUser();
   if (actor.role !== "teacher") return <RoleGate expected="teacher" />;
   const [workspace, annotationPage] = await Promise.all([
     getWorkspace(actor),
-    platformExtensions.annotations.listForTeacher(actor, { limit: 100 }),
+    platformExtensions.annotations.listForTeacher(actor, { limit: 100, courseId }),
   ]);
   const annotations = annotationPage.ok ? annotationPage.data.items : [];
   return (
@@ -77,7 +77,7 @@ export async function TeacherStudents() {
         title="Teaching Management"
         description="Review course participation and submissions, and guide each learner."
       />
-      <div className="inline-note">
+      <div id="private-notes" className="inline-note scroll-mt-6">
         <Users size={17} />
         <span>
           Participation appears here after enrollment. Progress is based on
@@ -90,7 +90,7 @@ export async function TeacherStudents() {
           submissions.
         </EmptyState>
       ) : (
-        workspace.enrollments.map((enrollment) => {
+        workspace.enrollments.filter((enrollment) => !courseId || enrollment.courseId === courseId).map((enrollment) => {
           const course = workspace.courses.find(
             (item) => item.id === enrollment.courseId,
           );

@@ -150,7 +150,7 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
         </aside>
       </div>
       {document.publishedVersion !== null && (
-        <TeacherCourseDiscussion courseId={id} />
+        <section id="course-discussions" className="scroll-mt-6"><TeacherCourseDiscussion courseId={id} /></section>
       )}
     </>
   );

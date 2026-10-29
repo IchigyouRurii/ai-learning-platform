@@ -45,3 +45,11 @@ Server Action 返回 `ActionResult<T>`；不把用户身份、课程所有者或
 作者数据与学生数据已明确分开：AuthoringDraft 包含评价配置；LearnerCourse/LearnerActivity 只含学习端可见内容。班级分配、路径、进度和答题记录绑定发布版本，草稿更新使用单独的 draftRevision。
 
 领域仓储端口见 `shared/database/extension-repositories.ts`，真实表结构开发规划见 `database/design/README.md`。这些端口尚未接入 Neon，不能把预留字段或声明当作已实现功能。
+
+### Lesson completion toggle
+
+The platform repository and student completion action accept an optional
+`completed` boolean (default `true` for existing callers). Passing `false`
+removes only the current student's completion for the specified course version
+and lesson, with enrollment checks. Repeating either operation is idempotent.
+The course page exposes this as a completion button with an Undo action.
