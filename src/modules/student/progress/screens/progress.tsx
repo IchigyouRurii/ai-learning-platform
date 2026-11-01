@@ -1,12 +1,20 @@
+import { courseLevel, lessonsAtLevel, type Course } from "@/shared/contracts";
 import Link from "next/link";
-import { MessageSquareText } from "lucide-react";
+import { BookOpen, CheckCheck, Compass, MessageSquareText } from "lucide-react";
 import {
   calculateProgress,
   getCurrentUser,
   getWorkspace,
+  getCourseCatalog,
+  getLearningPath,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
-import { EmptyState, PageHeading, ProgressBar } from "@/shared/ui/primitives";
+import {
+  EmptyState,
+  PageHeading,
+  ProgressBar,
+  StatCard,
+} from "@/shared/ui/primitives";
 
 type QuizAnswerRecord = {
   questionId: string;
@@ -43,10 +51,88 @@ function parseQuizAnswers(value: string): QuizAnswerRecord[] | null {
 export async function StudentProgress() {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
-  const workspace = await getWorkspace(user);
+  const [workspace, catalog, savedPath] = await Promise.all([
+    getWorkspace(user),
+    getCourseCatalog(user),
+    getLearningPath(user),
+  ]);
+  const activeLevelFor = (id: string) =>
+    courseLevel(
+      workspace.enrollments.find(
+        (item) => item.courseId === id && item.studentId === user.id,
+      )?.difficulty,
+    );
   const courses = workspace.courses.filter((course) =>
-    workspace.enrollments.some((item) => item.courseId === course.id),
+    workspace.enrollments.some(
+      (item) => item.courseId === course.id && item.studentId === user.id,
+    ),
   );
+  const createdCourses = courses.filter((course) => course.ownerId === user.id);
+  const enrolledCourses = courses.filter(
+    (course) => course.ownerId !== user.id,
+  );
+  function courseRows(items: Course[]) {
+    return items.map((course) => {
+      const progress = calculateProgress(
+        course,
+        workspace.submissions,
+        user.id,
+        activeLevelFor(course.id),
+      );
+      const lessonsDone = new Set(
+        (workspace.lessonCompletions ?? [])
+          .filter(
+            (item) =>
+              item.courseId === course.id &&
+              item.courseVersion === course.version &&
+              item.studentId === user.id &&
+              courseLevel(item.difficulty) === activeLevelFor(course.id),
+          )
+          .map((item) => item.lessonId),
+      ).size;
+      return (
+        <div className="progress-row" key={course.id}>
+          <div>
+            <Link
+              href={`/student/courses/${course.id}?level=${activeLevelFor(course.id)}`}
+            >
+              <h3>{course.title}</h3>
+            </Link>
+            <p className="form-hint">
+              Current difficulty: {activeLevelFor(course.id)}
+            </p>
+            <p className="muted">
+              {progress.done} / {progress.total} activities submitted
+            </p>
+            <p className="muted">
+              {lessonsDone} /{" "}
+              {lessonsAtLevel(course.lessons, activeLevelFor(course.id)).length}{" "}
+              lessons completed
+            </p>
+          </div>
+          <div className="progress-cell">
+            <strong>{progress.percent}%</strong>
+            <ProgressBar percent={progress.percent} />
+          </div>
+          <Link
+            href={`/student/courses/${course.id}?level=${activeLevelFor(course.id)}`}
+            className="button secondary"
+          >
+            Continue learning
+          </Link>
+        </div>
+      );
+    });
+  }
+  const completed = courses.filter(
+    (course) =>
+      calculateProgress(
+        course,
+        workspace.submissions,
+        user.id,
+        activeLevelFor(course.id),
+      ).percent === 100,
+  ).length;
   const submissions = workspace.submissions
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -57,55 +143,80 @@ export async function StudentProgress() {
         title="Every step counts."
         description="Review your progress and feedback from your teachers."
       />
-      <section className="panel">
-        <h2>In progress</h2>
-        {!courses.length ? (
+      <section className="stats-grid">
+        <StatCard
+          label="Enrolled courses"
+          value={enrolledCourses.length}
+          detail="Learn at your own pace"
+          icon={<BookOpen size={17} />}
+        />
+        <StatCard
+          label="Completed courses"
+          value={completed}
+          detail="Based on submitted activities"
+          icon={<CheckCheck size={17} />}
+        />
+        <StatCard
+          label="Available courses"
+          value={catalog.length}
+          detail="Explore courses in the marketplace"
+          icon={<Compass size={17} />}
+        />
+      </section>
+      {savedPath && (
+        <section className="panel path-summary">
+          <div>
+            <p className="eyebrow">YOUR LEARNING PATH</p>
+            <h2>{savedPath.title}</h2>
+            <p className="muted">
+              {savedPath.steps.length} courses · saved for you
+            </p>
+          </div>
+          <Link href="/student/path" className="button secondary">
+            View and update my path →
+          </Link>
+        </section>
+      )}
+      <section className="panel feedback-section">
+        <div className="section-heading">
+          <div>
+            <h2>My Created Courses</h2>
+            <p className="muted">
+              Personal courses you created in AI Studio ·{" "}
+              {createdCourses.length} courses
+            </p>
+          </div>
+          <Link href="/student/studio" className="button secondary">
+            Create Course
+          </Link>
+        </div>
+        {createdCourses.length ? (
+          courseRows(createdCourses)
+        ) : (
+          <EmptyState title="No created courses yet">
+            Create a personal course in AI Studio to start learning.
+          </EmptyState>
+        )}
+      </section>
+      <section className="panel feedback-section">
+        <div className="section-heading">
+          <div>
+            <h2>My Enrolled Courses</h2>
+            <p className="muted">
+              Courses you joined from the marketplace or through a class ·{" "}
+              {enrolledCourses.length} courses
+            </p>
+          </div>
+          <Link href="/student" className="button secondary">
+            Browse Marketplace
+          </Link>
+        </div>
+        {enrolledCourses.length ? (
+          courseRows(enrolledCourses)
+        ) : (
           <EmptyState title="No enrolled courses yet">
             Visit the marketplace to find a topic that interests you.
           </EmptyState>
-        ) : (
-          courses.map((course) => {
-            const progress = calculateProgress(
-              course,
-              workspace.submissions,
-              user.id,
-            );
-            const lessonsDone = new Set(
-              (workspace.lessonCompletions ?? [])
-                .filter(
-                  (item) =>
-                    item.courseId === course.id &&
-                    item.courseVersion === course.version &&
-                    item.studentId === user.id,
-                )
-                .map((item) => item.lessonId),
-            ).size;
-            return (
-              <div className="progress-row" key={course.id}>
-                <div>
-                  <Link href={`/student/courses/${course.id}`}>
-                    <h3>{course.title}</h3>
-                  </Link>
-                  <p className="muted">
-                    {progress.done} / {progress.total} activities submitted
-                  </p>
-                  <p className="muted">
-                    {lessonsDone} / {course.lessons.length} lessons completed
-                  </p>
-                </div>
-                <div className="progress-cell">
-                  <strong>{progress.percent}%</strong>
-                  <ProgressBar percent={progress.percent} />
-                </div>
-                <Link
-                  href={`/student/courses/${course.id}`}
-                  className="button secondary"
-                >
-                  Continue learning
-                </Link>
-              </div>
-            );
-          })
         )}
       </section>
       <section className="panel feedback-section">
@@ -189,8 +300,7 @@ export async function StudentProgress() {
                             (question, index) => {
                               const selected =
                                 answers.find(
-                                  (answer) =>
-                                    answer.questionId === question.id,
+                                  (answer) => answer.questionId === question.id,
                                 )?.selectedOptionIds ?? [];
                               const selectedText =
                                 selected

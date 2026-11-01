@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { databaseFailureDiagnostic } from "../../src/shared/database/diagnostics";
 import { getDatabasePool } from "../../src/shared/database/pool";
 
 const require = createRequire(import.meta.url);
@@ -23,21 +24,17 @@ export async function runDatabaseTask(
     pool = getDatabasePool();
     await task(pool);
   } catch (error) {
-    const code =
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      typeof error.code === "string" &&
-      /^[A-Z0-9_]+$/.test(error.code)
-        ? `（${error.code}）`
-        : "";
-    console.error(
-      `数据库操作失败${code}。请检查 .env、网络和数据库初始化状态；连接串不会打印到终端。`,
-    );
-    if (process.env.DEBUG_DB === "1")
-      console.error(
-        error instanceof Error ? error.message : "Unknown database error.",
-      );
+    const diagnostic = databaseFailureDiagnostic(error);
+    console.error(`Database operation failed [${diagnostic.code}].`);
+    console.error(diagnostic.hint);
+    if (process.env.DEBUG_DB === "1") {
+      // Error.message can contain SQL, credentials or private data. Do not print it.
+      const type =
+        error instanceof Error && /^[A-Za-z][A-Za-z0-9]*$/.test(error.name)
+          ? error.name
+          : "Error";
+      console.error(`Error type: ${type}; upstream message withheld.`);
+    }
     process.exitCode = 1;
   } finally {
     if (pool) await pool.end();

@@ -1,44 +1,51 @@
 import {
   getCurrentUser,
-  getLearningPath,
   getWorkspace,
+  getLearningPath,
   listLearningPaths,
+  getCourseCatalog,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { PageHeading } from "@/shared/ui/primitives";
+import { COURSE_LEVELS, lessonsAtLevel } from "@/shared/contracts";
 import { LearningPathPlanner } from "../components/planner";
 
 export async function StudentLearningPath() {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
-  const [workspace, savedPath, pathHistory] = await Promise.all([
+  const [workspace, history, catalog] = await Promise.all([
     getWorkspace(user),
-    getLearningPath(user),
     listLearningPaths(user),
+    getCourseCatalog(user),
   ]);
+  const savedPath = history[0] ?? (await getLearningPath(user));
+  const publicIds = new Set(catalog.map((course) => course.id));
   const courses = workspace.courses
-    .filter(
-      (course) =>
-        course.status === "published" && course.visibility === "cohort",
-    )
+    .filter((course) => publicIds.has(course.id))
     .map((course) => ({
       id: course.id,
       version: course.version,
       title: course.title,
       subject: course.subject,
       description: course.description,
+      levels: COURSE_LEVELS.filter(
+        (level) => lessonsAtLevel(course.lessons, level).length > 0,
+      ),
     }));
   return (
     <>
       <PageHeading
         eyebrow="PERSONAL LEARNING PATH"
-        title="A route built around your goal."
-        description="AI orders published micro-courses by difficulty and your available time. You can save the plan and follow it at your own pace."
+        title="My Learning Paths"
+        description="Connect courses into a route that works for you. Create a path, choose your levels, and start learning."
       />
       <LearningPathPlanner
         courses={courses}
         savedPath={savedPath}
-        history={pathHistory}
+        history={history}
+        enrollments={workspace.enrollments.filter(
+          (item) => item.studentId === user.id,
+        )}
       />
     </>
   );

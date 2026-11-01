@@ -1,4 +1,5 @@
 "use client";
+import type { CourseLevel } from "@/shared/contracts";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -57,11 +58,13 @@ function QuestionCard({
 
 export function QuizForm({
   courseId,
+  difficulty = "beginner",
   activity,
   latest,
   history = [],
 }: {
   courseId: string;
+  difficulty?: CourseLevel;
   activity: SafeActivity;
   latest?: Submission;
   history?: Submission[];
@@ -133,6 +136,7 @@ export function QuizForm({
           startTransition(async () => {
             const response = await submitQuizAction({
               courseId,
+              difficulty,
               activityId: activity.id,
               answers: questions.map((question) => ({
                 questionId: question.id,

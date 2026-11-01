@@ -1,6 +1,7 @@
 import "server-only";
 import {
   courseDraftSchema,
+  courseLevel,
   generationInputSchema,
   type CourseDraft,
   type GenerationInput,
@@ -16,6 +17,55 @@ import { parseGeneratedCourse } from "./parse-generated";
 const MAX_TOKENS = 8000;
 
 export async function generateCourse(
+  raw: Omit<GenerationInput, "subject" | "description"> &
+    Partial<Pick<GenerationInput, "subject" | "description">>,
+): Promise<CourseDraft> {
+  const input = generationInputSchema.parse(raw);
+  const draft = await generateSingleCourse(input);
+  const difficulty = courseLevel(
+    input.difficulty === "intermediate" ? "advanced" : input.difficulty,
+  );
+  // The server assigns level and globally unique IDs, never trusting model labels.
+  return courseDraftSchema.parse({
+    ...draft,
+    subject: input.subject,
+    description: input.description || draft.description,
+    lessons: draft.lessons.map((lesson) => ({
+      ...lesson,
+      difficulty,
+      id: `${difficulty}:${lesson.id}`,
+      blocks: lesson.blocks.map((block) =>
+        block.type !== "activity"
+          ? { ...block, id: `${difficulty}:${block.id}` }
+          : {
+              ...block,
+              id: `${difficulty}:${block.id}`,
+              activity: {
+                ...block.activity,
+                id: `${difficulty}:${block.activity.id}`,
+                ...(block.activity.questions
+                  ? {
+                      questions: block.activity.questions.map((q) => ({
+                        ...q,
+                        id: `${difficulty}:${q.id}`,
+                        options: q.options.map((o) => ({
+                          ...o,
+                          id: `${difficulty}:${o.id}`,
+                        })),
+                        correctOptionIds: q.correctOptionIds.map(
+                          (id) => `${difficulty}:${id}`,
+                        ),
+                      })),
+                    }
+                  : {}),
+              },
+            },
+      ),
+    })),
+  });
+}
+
+async function generateSingleCourse(
   raw: GenerationInput,
 ): Promise<CourseDraft> {
   const input = generationInputSchema.parse(raw);
@@ -131,7 +181,8 @@ function mockCourse(input: GenerationInput): CourseDraft {
               id: "activity-quiz",
               type: "quiz",
               title: "Check your understanding",
-              prompt: "Answer all five questions. Each has exactly one correct option.",
+              prompt:
+                "Answer all five questions. Each has exactly one correct option.",
               rubric: "One point per correct answer.",
               questions: [1, 2, 3, 4, 5].map(question),
             },

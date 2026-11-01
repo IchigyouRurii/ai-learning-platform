@@ -10,31 +10,20 @@ import {
 import {
   getCurrentUser,
   getWorkspace,
+  getCourseCatalog,
   recordGeneration,
   saveLearningPath,
+  enrollCourse,
+  getStudentCourseContext,
 } from "@/modules/platform";
-import type {
-  ActionResult,
-  LearningPathRecord,
-  LearningPathStep,
+import {
+  courseLevelSchema,
+  type ActionResult,
+  type LearningPathRecord,
+  type LearningPathStep,
 } from "@/shared/contracts";
+import { learningPathDraftSchema } from "@/shared/contracts/features/plans";
 import { actionError } from "@/shared/contracts/errors";
-
-const generatedPathSchema = z.object({
-  title: z.string().trim().min(1).max(160),
-  steps: z
-    .array(
-      z.object({
-        courseId: z.string().min(1),
-        courseVersion: z.number().int().positive(),
-        order: z.number().int().nonnegative(),
-        targetMinutes: z.number().int().positive().max(10000),
-        reason: z.string().trim().min(1).max(1000),
-      }),
-    )
-    .min(1)
-    .max(8),
-});
 
 export async function generatePathAction(
   raw: unknown,
@@ -44,12 +33,13 @@ export async function generatePathAction(
     const actor = await getCurrentUser();
     if (actor.role !== "student")
       throw new Error("A student account is required.");
-    const workspace = await getWorkspace(actor);
+    const [workspace, publicCourses] = await Promise.all([
+      getWorkspace(actor),
+      getCourseCatalog(actor),
+    ]);
+    const ids = new Set(publicCourses.map((course) => course.id));
     const catalog = workspace.courses
-      .filter(
-        (course) =>
-          course.status === "published" && course.visibility === "cohort",
-      )
+      .filter((course) => ids.has(course.id))
       .map(catalogItem);
     const generated = await generateLearningPath(profile, catalog);
     await recordGeneration(actor, {
@@ -67,34 +57,85 @@ export async function savePathAction(
   raw: unknown,
 ): Promise<ActionResult<LearningPathRecord>> {
   try {
-    const input = generatedPathSchema.parse(raw);
+    const input = learningPathDraftSchema
+      .extend({ id: z.string().min(1).max(200).optional() })
+      .parse(raw);
+    const path = await saveLearningPath(await getCurrentUser(), input);
+    revalidatePath("/student/path");
+    revalidatePath("/student/progress");
+    return { ok: true, data: path };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+/** Each enrollment is independently authorized; already active levels never switch implicitly. */
+export async function enrollPathCoursesAction(raw: unknown): Promise<
+  ActionResult<{
+    outcomes: {
+      courseId: string;
+      difficulty: string;
+      status: "enrolled" | "existing" | "failed";
+      message: string;
+    }[];
+  }>
+> {
+  try {
+    const input = z
+      .array(
+        z.object({
+          courseId: z.string().min(1).max(200),
+          difficulty: courseLevelSchema,
+        }),
+      )
+      .min(1)
+      .refine(
+        (items) =>
+          new Set(items.map((item) => item.courseId)).size === items.length,
+        "A course can only appear once.",
+      )
+      .parse(raw);
     const actor = await getCurrentUser();
     if (actor.role !== "student")
       throw new Error("A student account is required.");
-    const workspace = await getWorkspace(actor);
-    const published = new Map(
-      workspace.courses
-        .filter(
-          (course) =>
-            course.status === "published" && course.visibility === "cohort",
-        )
-        .map((course) => [course.id, course]),
+    const catalog = new Set(
+      (await getCourseCatalog(actor)).map((course) => course.id),
     );
-    const steps = input.steps.map((step, index) => {
-      const course = published.get(step.courseId);
-      if (!course || course.version !== step.courseVersion)
-        throw new Error(
-          "A course in this plan is no longer available. Generate the plan again.",
-        );
-      return { ...step, order: index };
-    });
-    const path = await saveLearningPath(actor, {
-      title: input.title,
-      steps,
-    });
-    revalidatePath("/student/path");
-    revalidatePath("/student");
-    return { ok: true, data: path };
+    const outcomes = [];
+    for (const step of input) {
+      try {
+        if (!catalog.has(step.courseId))
+          throw new Error("This course is no longer available in Marketplace.");
+        const context = await getStudentCourseContext(actor, step.courseId);
+        if (context?.enrolled) {
+          const active = context.activeLevel ?? "beginner";
+          outcomes.push({
+            courseId: step.courseId,
+            difficulty: active,
+            status: "existing" as const,
+            message:
+              active === step.difficulty
+                ? "Already enrolled"
+                : `Already learning ${active}. Open the course to switch difficulty.`,
+          });
+        } else {
+          await enrollCourse(actor, step.courseId, step.difficulty);
+          outcomes.push({
+            ...step,
+            status: "enrolled" as const,
+            message: "Enrolled successfully",
+          });
+        }
+      } catch (error) {
+        outcomes.push({
+          ...step,
+          status: "failed" as const,
+          message: actionError(error),
+        });
+      }
+    }
+    revalidatePath("/student", "layout");
+    return { ok: true, data: { outcomes } };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }

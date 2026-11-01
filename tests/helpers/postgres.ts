@@ -2,7 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import type { Pool } from "pg";
 
 // Real PostgreSQL compiled to WebAssembly, only for integration tests. Production
-// always uses node-postgres against DATABASE_URL; this is not a runtime fallback.
+// uses a PostgreSQL-compatible pool against DATABASE_URL; this is not a runtime fallback.
 export async function createTestPostgres() {
   const database = new PGlite();
   await database.waitReady;

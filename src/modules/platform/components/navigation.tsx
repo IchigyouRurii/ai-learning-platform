@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import type { ComponentProps } from "react";
 import {
   ChartNoAxesCombined,
-  GraduationCap,
   FileText,
   LayoutGrid,
   Route,
@@ -14,6 +15,44 @@ import {
   BookOpen,
 } from "lucide-react";
 import type { Role } from "@/shared/contracts";
+
+function NavigationPending() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span className="navigation-pending" role="status">
+      <span className="navigation-pending-mark" aria-hidden="true" />
+      <span className="sr-only">Loading page…</span>
+    </span>
+  );
+}
+
+/** Only fully prefetch a route after the user expresses intent, avoiding a burst of database reads. */
+function NavigationLink(props: ComponentProps<typeof Link>) {
+  const [intent, setIntent] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearIntentTimer = () => {
+    if (timer.current) clearTimeout(timer.current);
+  };
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  return (
+    <Link
+      {...props}
+      prefetch={props["aria-current"] === "page" ? false : intent}
+      onPointerEnter={() => {
+        clearIntentTimer();
+        timer.current = setTimeout(() => setIntent(true), 150);
+      }}
+      onPointerLeave={clearIntentTimer}
+      onFocus={() => setIntent(true)}
+    />
+  );
+}
 
 export function Navigation({ role }: { role: Role }) {
   const pathname = usePathname();
@@ -29,7 +68,7 @@ export function Navigation({ role }: { role: Role }) {
             { href: "/teacher", label: "Course Marketplace", icon: LayoutGrid },
             {
               href: "/teacher/creations",
-              label: "My Creations",
+              label: "My Creation",
               icon: FileText,
             },
             {
@@ -37,18 +76,13 @@ export function Navigation({ role }: { role: Role }) {
               label: "Teaching Management",
               icon: Users,
             },
-            { href: "/teacher/classes", label: "Classes", icon: School },
+            { href: "/teacher/classes", label: "Class", icon: School },
           ]
         : [
             {
               href: "/student",
               label: "Course Marketplace",
-              icon: GraduationCap,
-            },
-            {
-              href: "/student/studio",
-              label: "AI Studio",
-              icon: Sparkles,
+              icon: LayoutGrid,
             },
             {
               href: "/student/path",
@@ -60,7 +94,12 @@ export function Navigation({ role }: { role: Role }) {
               label: "My Learning",
               icon: ChartNoAxesCombined,
             },
-            { href: "/student/classes", label: "My Classes", icon: School },
+            { href: "/student/classes", label: "My Class", icon: School },
+            {
+              href: "/student/studio",
+              label: "AI Studio",
+              icon: Sparkles,
+            },
           ];
   return (
     <nav className="navigation" aria-label="Primary navigation">
@@ -70,7 +109,7 @@ export function Navigation({ role }: { role: Role }) {
             ? pathname === href
             : pathname.startsWith(href);
         return (
-          <Link
+          <NavigationLink
             key={href}
             href={href}
             title={label}
@@ -81,7 +120,8 @@ export function Navigation({ role }: { role: Role }) {
             <Icon size={18} />
             <span className="nav-label">{label}</span>
             {active && <span className="nav-dot" />}
-          </Link>
+            <NavigationPending />
+          </NavigationLink>
         );
       })}
     </nav>

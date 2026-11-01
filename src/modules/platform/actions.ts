@@ -3,3 +3,5 @@ export {
   changeUserRoleAction,
   withdrawCourseAction,
 } from "./server/admin-actions";
+
+export { deleteOwnedCourseAction } from "./server/course-actions";

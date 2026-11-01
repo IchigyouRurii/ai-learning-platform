@@ -113,7 +113,46 @@ export const contentBlockSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+export const COURSE_INTRODUCTION_MAX_LENGTH = 80;
+export const courseIntroductionSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(
+    COURSE_INTRODUCTION_MAX_LENGTH,
+    `Keep the course introduction within ${COURSE_INTRODUCTION_MAX_LENGTH} characters.`,
+  );
+/** Existing long descriptions remain readable and can be kept unchanged. */
+export function validateCourseIntroduction(
+  value: string,
+  previous?: string,
+): string {
+  return previous !== undefined && value === previous
+    ? value
+    : courseIntroductionSchema.parse(value);
+}
+
+export const COURSE_LEVELS = ["beginner", "advanced", "expert"] as const;
+export const courseLevelSchema = z.enum(COURSE_LEVELS);
+export type CourseLevel = z.infer<typeof courseLevelSchema>;
+export const COURSE_SUBJECTS = [
+  "Computer Science",
+  "Mathematics",
+  "English",
+  "Literature",
+  "Business",
+  "Science",
+  "Other",
+] as const;
+export const courseSubjectSchema = z.enum(COURSE_SUBJECTS);
+export function courseLevel(value: unknown): CourseLevel {
+  const parsed = courseLevelSchema.safeParse(value);
+  return parsed.success ? parsed.data : "beginner";
+}
+
 export const lessonSchema = z.object({
+  // Missing on historical revisions: those lessons belong to Beginner.
+  difficulty: courseLevelSchema.optional(),
   id: z.string().min(1),
   title: z.string().min(1).max(160),
   blocks: z.array(contentBlockSchema).min(1).max(30),
@@ -126,9 +165,20 @@ export const courseDraftSchema = z
     subject: z.string().min(1).max(100),
     audience: z.string().min(1).max(500),
     goals: z.array(z.string().min(1).max(500)).min(1).max(8),
-    lessons: z.array(lessonSchema).min(1).max(12),
+    lessons: z.array(lessonSchema).min(1).max(36),
   })
   .superRefine((course, context) => {
+    for (const level of COURSE_LEVELS) {
+      if (
+        course.lessons.filter(
+          (lesson) => courseLevel(lesson.difficulty) === level,
+        ).length > 12
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Each difficulty supports at most 12 lessons",
+        });
+    }
     const lessonIds = new Set<string>();
     const activityIds = new Set<string>();
     const questionIds = new Set<string>();
@@ -165,10 +215,21 @@ export const generationInputSchema = z.object({
     .trim()
     .min(2, "Enter a topic with at least two characters")
     .max(200),
-  audience: z.string().trim().min(2).max(500),
+  subject: courseSubjectSchema.default("Computer Science"),
+  description: z
+    .string()
+    .trim()
+    .max(COURSE_INTRODUCTION_MAX_LENGTH)
+    .default(""),
+  audience: z
+    .string()
+    .trim()
+    .min(2)
+    .max(500)
+    .default("Learners at the requested difficulty"),
   goals: z.string().trim().min(2).max(2000),
   difficulty: z
-    .enum(["beginner", "intermediate", "advanced"])
+    .enum(["beginner", "intermediate", "advanced", "expert"])
     .default("beginner"),
   materials: z.string().trim().max(20000).default(""),
 });
@@ -209,6 +270,7 @@ export type LearnerContentBlock =
   | Extract<ContentBlock, { type: "text" | "image" | "video" | "slides" }>
   | { type: "activity"; id: string; activity: SafeActivity };
 export type LearnerLesson = {
+  difficulty?: CourseLevel;
   id: string;
   title: string;
   blocks: LearnerContentBlock[];

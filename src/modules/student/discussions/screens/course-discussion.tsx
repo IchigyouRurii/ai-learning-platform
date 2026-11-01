@@ -32,11 +32,18 @@ export async function StudentCourseDiscussion({
     );
 
   const threads: QuestionThread[] = [];
-  for (const question of list.data.items) {
-    const thread = await platformExtensions.discussions.getThread(actor, {
-      questionId: question.id,
-    });
-    if (thread.ok) threads.push(thread.data);
+  // Cap concurrency at the pool size, retaining list order and permission checks.
+  for (let offset = 0; offset < list.data.items.length; offset += 5) {
+    const batch = await Promise.all(
+      list.data.items
+        .slice(offset, offset + 5)
+        .map((question) =>
+          platformExtensions.discussions.getThread(actor, {
+            questionId: question.id,
+          }),
+        ),
+    );
+    for (const thread of batch) if (thread.ok) threads.push(thread.data);
   }
 
   return (

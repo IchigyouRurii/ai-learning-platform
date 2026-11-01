@@ -32,8 +32,6 @@ button:disabled {
   overflow-y: auto;
   box-shadow: 8px 0 32px rgb(32 47 78 / 2.5%);
 }
-.sidebar:hover,
-.sidebar:focus-within,
 .sidebar-expanded {
   width: var(--ui-sidebar-expanded-width);
 }
@@ -60,20 +58,10 @@ button:disabled {
   opacity: 0;
   visibility: hidden;
 }
-.sidebar:hover .brand > div,
-.sidebar:focus-within .brand > div,
 .sidebar-expanded .brand > div,
-.sidebar:hover .workspace-label,
-.sidebar:focus-within .workspace-label,
 .sidebar-expanded .workspace-label,
-.sidebar:hover .nav-label,
-.sidebar:focus-within .nav-label,
 .sidebar-expanded .nav-label,
-.sidebar:hover .nav-dot,
-.sidebar:focus-within .nav-dot,
 .sidebar-expanded .nav-dot,
-.sidebar:hover .sidebar-bottom,
-.sidebar:focus-within .sidebar-bottom,
 .sidebar-expanded .sidebar-bottom {
   opacity: 1;
   visibility: visible;
@@ -133,21 +121,6 @@ button:disabled {
 .sidebar-note p,
 .sidebar-version {
   color: var(--ui-secondary);
-}
-.sidebar-toggle {
-  margin-top: auto;
-  display: grid;
-  place-items: center;
-  min-height: 40px;
-  width: 44px;
-  flex-shrink: 0;
-  background: transparent;
-  color: var(--ui-secondary);
-  border: 0;
-  border-radius: 8px;
-}
-.sidebar-toggle:hover {
-  background: var(--ui-label-background);
 }
 .main-shell {
   margin-left: var(--ui-sidebar-width);
@@ -559,8 +532,7 @@ summary {
     visibility: visible;
   }
   .sidebar .workspace-label,
-  .sidebar .sidebar-bottom,
-  .sidebar-toggle {
+  .sidebar .sidebar-bottom {
     display: none;
   }
   .navigation {
@@ -645,19 +617,19 @@ summary {
   overflow: hidden;
 }
 
-/* Teacher catalog: Figma export layout, scoped to avoid changing auth pages. */
-.teacher-shell .sidebar .brand strong {
+/* Shared workspace sidebar styling; auth pages retain their own branding layout. */
+.app-shell .sidebar .brand strong {
   font-size: 18px;
   letter-spacing: -0.04em;
 }
-.teacher-shell .sidebar .brand {
+.app-shell .sidebar .brand {
   gap: 8px;
   padding: 0 6px;
 }
-.teacher-shell .sidebar .brand small {
+.app-shell .sidebar .brand small {
   display: none;
 }
-.teacher-shell .sidebar .navigation {
+.app-shell .sidebar .navigation {
   margin-top: 0;
 }
 .teacher-shell .topbar {
@@ -825,9 +797,10 @@ summary {
 }
 .marketplace-card-body > p {
   margin-top: 6px;
-  min-height: 24px;
+  min-height: 2.8em;
+  line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -850,7 +823,7 @@ summary {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid #e9edf4;
 }
-.marketplace-levels > button {
+.marketplace-levels > :is(button, a) {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -862,10 +835,10 @@ summary {
   font-weight: 600;
   color: #244b8e;
 }
-.marketplace-levels > button + button {
+.marketplace-levels > :is(button, a) + :is(button, a) {
   border-left: 1px solid #e9edf4;
 }
-.marketplace-levels > button:hover {
+.marketplace-levels > :is(button, a):hover {
   background: #f2f6fc;
   color: #0d4cb4;
 }
@@ -954,7 +927,7 @@ summary {
   }
 }
 @media (max-width: 600px) {
-  .teacher-shell .sidebar .brand {
+  .app-shell .sidebar .brand {
     margin-bottom: 6px;
   }
   .teacher-shell .topbar {
@@ -977,7 +950,7 @@ summary {
   .catalog-count {
     display: none;
   }
-  .marketplace-levels > button {
+  .marketplace-levels > :is(button, a) {
     gap: 4px;
     font-size: 13px;
   }
@@ -1016,7 +989,7 @@ summary {
   .sidebar .nav-label {
     min-width: 0;
   }
-  .teacher-shell .sidebar .nav-dot {
+  .app-shell .sidebar .nav-dot {
     display: none;
   }
 }
@@ -1392,3 +1365,264 @@ summary {
   color: var(--ui-secondary);
   font-size: 12px;
 }
+
+.navigation-pending {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: flex;
+  color: var(--ui-link);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
+.navigation-pending-mark {
+  display: block;
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.course-level-tabs {
+  margin-top: 16px;
+}
+.course-level-tabs button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* Learning paths reuse workspace surfaces and form controls. */
+.learning-path-page {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.learning-path-card {
+  padding: 28px;
+  min-width: 0;
+}
+.learning-path-card .section-heading {
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.path-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.learning-route {
+  list-style: none;
+  padding: 12px 0 0;
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+.learning-route-stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 20px;
+  padding-bottom: 24px;
+}
+.learning-route-stop:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 36px;
+  bottom: 0;
+  left: 17px;
+  width: 2px;
+  background: var(--ui-border);
+}
+.learning-route-stop:last-child {
+  padding-bottom: 0;
+}
+.learning-route-stop .path-order {
+  width: 36px;
+  height: 36px;
+  position: relative;
+  z-index: 1;
+}
+.learning-route-course {
+  padding: 20px 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-surface, #fff);
+  box-shadow: 0 5px 18px rgb(28 48 88 / 4%);
+  min-width: 0;
+}
+.learning-route-course h3 {
+  margin: 12px 0 8px;
+  overflow-wrap: anywhere;
+}
+.learning-route-course p {
+  margin: 8px 0 16px;
+}
+.learning-route-course .badge {
+  text-transform: none;
+}
+.path-editor-course {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  gap: 12px;
+}
+.path-editor-course label {
+  margin: 0;
+}
+.path-editor-steps li {
+  align-items: start;
+}
+.path-add-course {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px dashed var(--ui-border);
+  border-radius: 16px;
+  margin: 20px 0;
+}
+.path-add-course label {
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .learning-path-card {
+    padding: 20px 16px;
+  }
+  .learning-route-stop {
+    gap: 12px;
+  }
+  .learning-route-course {
+    padding: 16px;
+  }
+}
+.path-course-picker {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+.path-course-picker > label {
+  font-weight: 600;
+}
+.path-course-picker-input {
+  position: relative;
+}
+.path-course-picker-input input {
+  padding-right: 40px;
+  width: 100%;
+}
+.path-course-picker-input > svg {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.path-course-picker-options {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--ui-border);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(28 48 88 / 12%);
+  padding: 6px;
+}
+.path-course-picker-options [role="option"] {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.path-course-picker-options .is-active {
+  background: #edf2fb;
+}
+.path-course-picker-options small {
+  color: var(--ui-muted);
+}
+.path-course-picker-options p {
+  padding: 12px;
+  margin: 0;
+}
+/* Saved routes run left to right; markers align to each card center. */
+.learning-route {
+  --route-gap: 24px;
+  display: flex;
+  gap: var(--route-gap);
+  overflow-x: auto;
+  padding: 12px 0 16px;
+  scroll-snap-type: x proximity;
+}
+.learning-route-stop {
+  flex: 1 0 300px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0;
+  scroll-snap-align: start;
+}
+.learning-route-stop .path-order {
+  align-self: center;
+}
+.learning-route-stop:not(:last-child)::before {
+  top: 17px;
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  height: 2px;
+  width: calc(100% + var(--route-gap));
+}
+.learning-route-course {
+  flex: 1;
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .learning-route { --route-gap: 16px; }
+  .learning-route-stop {
+    flex-basis: 280px;
+    gap: 18px;
+  }
+}
+
+/* Compact confirmation window, rendered in the shared Dialog portal. */
+.leave-course-dialog {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 60;
+  width: min(460px, calc(100vw - 32px));
+  max-width: 460px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: 28px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-dialog-radius, 20px);
+  background: #fff;
+  box-shadow: var(--ui-dialog-shadow, 0 24px 80px rgb(20 32 58 / 20%));
+}
+.leave-course-dialog [data-slot="dialog-title"] { padding-right: 24px; font-size: 20px; }
+.leave-course-dialog [data-slot="dialog-description"] { margin: 8px 0 12px; font-size: 14px; line-height: 1.7; }
+.leave-course-dialog [data-slot="dialog-footer"] { margin-top: 8px; }
+
+.teacher-course-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.teacher-course-action-buttons {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+.teacher-course-action-buttons .button { white-space: nowrap; }

@@ -1,62 +1,80 @@
+import { DeleteCourseButton } from "@/modules/platform/components/delete-course-button";
+import { CourseOutline } from "@/shared/ui/course-outline";
+import { Suspense } from "react";
+import { subjectLabel } from "@/shared/ui/course-catalog";
+import { courseLevel, lessonsAtLevel } from "@/shared/contracts";
+import { CourseLevelNavigation } from "@/shared/ui/course-level-navigation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil, Target } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 import {
   calculateProgress,
   getCurrentUser,
-  getWorkspace,
-  isCourseManagedByClass,
-  platformExtensions,
+  canDeleteOwnedCourse,
+  getStudentCourseContext,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { toSafeActivity } from "@/shared/contracts";
 import { Badge, PageHeading, ProgressBar } from "@/shared/ui/primitives";
 import { StudentCourseDiscussion } from "@/modules/student/discussions/screens/course-discussion";
 import { BlockComment } from "@/modules/student/annotations/components/block-comment";
-import {
-  MyAnnotations,
-  type AnnotationContext,
-} from "@/modules/student/annotations/components/my-annotations";
+import type { AnnotationContext } from "@/modules/student/annotations/components/my-annotations";
+import { StudentCourseAnnotations } from "@/modules/student/annotations/screens/course-annotations";
 import { ActivityForm } from "../../activities/components/activity-form";
+import { LeaveCourseButton } from "../../activities/components/leave-course-button";
 import { EnrollButton } from "../../activities/components/enroll-button";
 import { QuizForm } from "../../activities/components/quiz-form";
 import { LessonCompleteButton } from "../components/lesson-complete-button";
 
-export async function StudentCourseDetail({ id }: { id: string }) {
+export async function StudentCourseDetail({
+  id,
+  level: rawLevel,
+}: {
+  id: string;
+  level?: string;
+}) {
   const user = await getCurrentUser();
   if (user.role !== "student") return <RoleGate expected="student" />;
-  const workspace = await getWorkspace(user);
-  const course = workspace.courses.find((item) => item.id === id);
-  if (!course) notFound();
-  const enrolled = workspace.enrollments.some((item) => item.courseId === id);
-  const classManaged = await isCourseManagedByClass(course.id);
-  const progress = calculateProgress(course, workspace.submissions, user.id);
+  const context = await getStudentCourseContext(user, id);
+  if (!context) notFound();
+  const {
+    course,
+    enrolled,
+    activeLevel,
+    classManaged,
+    submissions,
+    lessonCompletions,
+  } = context;
+  const level = rawLevel ? courseLevel(rawLevel) : (activeLevel ?? "beginner");
+  const canStudy = enrolled && activeLevel === level;
+  const deletable =
+    course.ownerId === user.id && (await canDeleteOwnedCourse(user, id));
+  const lessons = lessonsAtLevel(course.lessons, level);
+  const progress = calculateProgress(
+    { ...course, lessons },
+    submissions,
+    user.id,
+    level,
+  );
   const completedLessonIds = new Set(
-    (workspace.lessonCompletions ?? [])
+    lessonCompletions
       .filter(
         (item) =>
           item.courseId === course.id &&
           item.courseVersion === course.version &&
-          item.studentId === user.id,
+          item.studentId === user.id &&
+          courseLevel(item.difficulty) === level,
       )
       .map((item) => item.lessonId),
   );
-  const lessonsDone = course.lessons.filter((lesson) =>
+  const lessonsDone = lessons.filter((lesson) =>
     completedLessonIds.has(lesson.id),
   ).length;
-  const lessonPercent = course.lessons.length
-    ? Math.round((lessonsDone / course.lessons.length) * 100)
+  const lessonPercent = lessons.length
+    ? Math.round((lessonsDone / lessons.length) * 100)
     : 0;
-  const annotationResult = enrolled
-    ? await platformExtensions.annotations.listMine(user, {
-        courseId: course.id,
-        courseVersion: course.version,
-        limit: 100,
-      })
-    : null;
-  const annotations = annotationResult?.ok ? annotationResult.data.items : [];
   const annotationContext: AnnotationContext = Object.fromEntries(
-    course.lessons.flatMap((lesson) =>
+    lessons.flatMap((lesson) =>
       lesson.blocks.map((block) => [
         block.id,
         {
@@ -78,48 +96,75 @@ export async function StudentCourseDetail({ id }: { id: string }) {
         Back to Marketplace
       </Link>
       <PageHeading
-        eyebrow={course.subject}
+        eyebrow={subjectLabel(course.subject, course.title)}
         title={course.title}
         description={course.description}
         action={
           course.visibility === "personal" ? (
-            <Link
-              href={`/student/courses/${course.id}/edit`}
-              className="button secondary"
-            >
-              <Pencil size={15} />
-              Edit course
-            </Link>
+            <div className="heading-actions">
+              {deletable && (
+                <DeleteCourseButton courseId={course.id} title={course.title} />
+              )}
+              <Link
+                href={`/student/courses/${course.id}/edit`}
+                className="button secondary"
+              >
+                <Pencil size={15} />
+                Edit course
+              </Link>
+            </div>
+          ) : enrolled && !classManaged && course.ownerId !== user.id ? (
+            <LeaveCourseButton courseId={course.id} />
           ) : undefined
         }
       />
-      {enrolled && (
+      {enrolled && classManaged && (
+        <p className="form-hint">
+          Class course · Enrollment is managed by your teacher.
+        </p>
+      )}
+      {canStudy && (
         <p className="form-hint">
           Private note: ask your teacher about this exact part. Only you and
           your teacher can see it.
         </p>
       )}
+      <CourseLevelNavigation value={level} href={`/student/courses/${id}`} />
+      {!lessons.length && (
+        <section className="panel mb-6">
+          <p>No {level} materials have been generated yet.</p>
+        </section>
+      )}
       <div className="detail-grid">
         <div>
-          {!enrolled ? (
-            <section className="panel join-panel">
-              <Target size={36} strokeWidth={1.2} />
-              <h2>Ready to explore this topic?</h2>
-              <p className="muted">
-                Enroll to complete activities, receive feedback, and save your
-                progress.
-              </p>
-              {classManaged ? (
+          {!canStudy ? (
+            <section className="panel course-outline-panel">
+              <CourseOutline
+                title={course.title}
+                description={course.description}
+                level={level}
+                lessons={lessons}
+              />
+              {!lessons.length ? (
                 <p className="muted">
-                  This course is managed by a class. Ask your teacher to add you
-                  to the class.
+                  Materials for this difficulty are not available yet.
+                </p>
+              ) : classManaged && !enrolled ? (
+                <p className="muted">
+                  This course is managed by a class. Ask your teacher to add
+                  you.
                 </p>
               ) : (
-                <EnrollButton courseId={course.id} />
+                <EnrollButton
+                  courseId={course.id}
+                  level={level}
+                  activeLevel={activeLevel}
+                  version={course.version}
+                />
               )}
             </section>
           ) : (
-            course.lessons.map((lesson, index) => (
+            lessons.map((lesson, index) => (
               <section
                 className="panel lesson-panel"
                 id={lesson.id}
@@ -134,6 +179,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                   </div>
                   <LessonCompleteButton
                     courseId={course.id}
+                    difficulty={level}
                     courseVersion={course.version}
                     lessonId={lesson.id}
                     completed={completedLessonIds.has(lesson.id)}
@@ -142,7 +188,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                 {lesson.blocks.map((block) => {
                   const attempts =
                     block.type === "activity"
-                      ? workspace.submissions
+                      ? submissions
                           .filter(
                             (item) =>
                               item.courseId === course.id &&
@@ -167,6 +213,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                         block.activity.type === "reflection" ? (
                         <ActivityForm
                           courseId={course.id}
+                          difficulty={level}
                           activity={block.activity}
                           latest={latest}
                           history={attempts}
@@ -175,6 +222,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
                         block.activity.type === "quiz" ? (
                         <QuizForm
                           courseId={course.id}
+                          difficulty={level}
                           activity={toSafeActivity(block.activity)}
                           latest={latest}
                           history={attempts}
@@ -203,7 +251,7 @@ export async function StudentCourseDetail({ id }: { id: string }) {
           )}
         </div>
         <aside className="panel course-summary">
-          <Badge tone="green">{course.lessons.length} lessons</Badge>
+          <Badge tone="green">{lessons.length} lessons</Badge>
           <h3>What you will learn</h3>
           <ul>
             {course.goals.map((goal, index) => (
@@ -211,59 +259,66 @@ export async function StudentCourseDetail({ id }: { id: string }) {
             ))}
           </ul>
           <hr />
-          {enrolled ? (
+          {canStudy ? (
             <>
-          <h3>Learning progress</h3>
-          <ProgressBar percent={progress.percent} />
-          <p className="muted">
-            {progress.done} / {progress.total} activities submitted
-          </p>
-          <p className="form-hint">
-            Activity completion records submissions, not mastery.
-          </p>
-          <hr />
-          <h3>Lesson completion</h3>
-          <ProgressBar percent={lessonPercent} />
-          <p className="muted">
-            {lessonsDone} / {course.lessons.length} lessons completed
-          </p>
-          <hr />
-          <Link href="/student/progress" className="text-link">
-            View learning records and teacher feedback →
-          </Link>
+              <h3>Learning progress</h3>
+              <ProgressBar percent={progress.percent} />
+              <p className="muted">
+                {progress.done} / {progress.total} activities submitted
+              </p>
+              <p className="form-hint">
+                Activity completion records submissions, not mastery.
+              </p>
+              <hr />
+              <h3>Lesson completion</h3>
+              <ProgressBar percent={lessonPercent} />
+              <p className="muted">
+                {lessonsDone} / {lessons.length} lessons completed
+              </p>
+              <hr />
+              <Link href="/student/progress" className="text-link">
+                View learning records and teacher feedback →
+              </Link>
             </>
           ) : (
             <>
-              <h3>Course outline</h3>
-              <ol className="grid list-decimal gap-3 pl-5">
-                {course.lessons.map((lesson) => (
-                  <li key={lesson.id}>
-                    <span className="font-medium">{lesson.title}</span>
-                    <p className="form-hint">
-                      {lesson.blocks.filter((block) => block.type === "activity").length} activities
-                    </p>
-                  </li>
-                ))}
-              </ol>
               <p className="form-hint">
-                Enroll to access lessons and activities and track your learning.
+                {activeLevel
+                  ? `Currently enrolled: ${activeLevel}. Switch difficulty to start this learning route.`
+                  : "Choose a difficulty and enroll to start learning."}
               </p>
             </>
           )}
         </aside>
       </div>
-      {enrolled && (
-        <MyAnnotations
-          courseId={course.id}
-          annotations={annotations}
-          context={annotationContext}
-        />
+      {canStudy && (
+        <Suspense
+          fallback={
+            <section className="panel mt-6" aria-busy="true">
+              <p className="muted">Loading notes…</p>
+            </section>
+          }
+        >
+          <StudentCourseAnnotations
+            courseId={course.id}
+            courseVersion={course.version}
+            context={annotationContext}
+          />
+        </Suspense>
       )}
-      {enrolled && (
-        <StudentCourseDiscussion
-          courseId={course.id}
-          courseVersion={course.version}
-        />
+      {canStudy && (
+        <Suspense
+          fallback={
+            <section className="panel mt-6" aria-busy="true">
+              <p className="muted">Loading course Q&amp;A…</p>
+            </section>
+          }
+        >
+          <StudentCourseDiscussion
+            courseId={course.id}
+            courseVersion={course.version}
+          />
+        </Suspense>
       )}
     </>
   );

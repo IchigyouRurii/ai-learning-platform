@@ -70,6 +70,7 @@ export async function updateCourseAction(
       content,
     );
     revalidatePath(`/teacher/courses/${courseId}`);
+    revalidatePath(`/teacher/marketplace/${courseId}`);
     revalidatePath(`/student/courses/${courseId}`);
     return { ok: true, data: document };
   } catch (error) {
@@ -87,6 +88,7 @@ export async function publishCourseRevisionAction(
     revalidatePath("/teacher/creations");
     revalidatePath("/student");
     revalidatePath(`/teacher/courses/${courseId}`);
+    revalidatePath(`/teacher/marketplace/${courseId}`);
     revalidatePath(`/student/courses/${courseId}`);
     return { ok: true, data: { version: course.version } };
   } catch (error) {

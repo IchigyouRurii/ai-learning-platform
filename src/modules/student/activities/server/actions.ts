@@ -4,11 +4,18 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   enrollCourse,
+  leaveCourse,
+  switchCourseLevel,
   getCurrentUser,
   getLearningContext,
   recordSubmission,
 } from "@/modules/platform";
-import type { ActionResult, QuizResult } from "@/shared/contracts";
+import {
+  courseLevelSchema,
+  type CourseLevel,
+  type ActionResult,
+  type QuizResult,
+} from "@/shared/contracts";
 import { actionError } from "@/shared/contracts/errors";
 import { evaluateAnswer } from "./feedback";
 import { gradeQuiz } from "./quiz";
@@ -16,6 +23,7 @@ import { gradeQuiz } from "./quiz";
 const quizAnswerSchema = z.object({
   courseId: z.string().min(1),
   activityId: z.string().min(1),
+  difficulty: courseLevelSchema.default("beginner"),
   answers: z
     .array(
       z.object({
@@ -33,14 +41,16 @@ export async function submitQuizAction(
   try {
     const input = quizAnswerSchema.parse(raw);
     const actor = await getCurrentUser();
-    const { course, activity } = await getLearningContext(
+    const { course, activity, difficulty } = await getLearningContext(
       actor,
       input.courseId,
       input.activityId,
+      input.difficulty,
     );
     const result = gradeQuiz(activity, input.answers);
     await recordSubmission(actor, {
       courseId: course.id,
+      difficulty,
       courseVersion: course.version,
       activityId: activity.id,
       answer: JSON.stringify(input.answers),
@@ -48,7 +58,7 @@ export async function submitQuizAction(
       score: result.score,
       maxScore: result.maxScore,
     });
-    revalidatePath("/student");
+    revalidatePath("/student", "layout");
     revalidatePath("/teacher");
     return { ok: true, data: result };
   } catch (error) {
@@ -59,6 +69,7 @@ export async function submitQuizAction(
 const answerSchema = z.object({
   courseId: z.string().min(1),
   activityId: z.string().min(1),
+  difficulty: courseLevelSchema.default("beginner"),
   answer: z
     .string()
     .trim()
@@ -74,10 +85,11 @@ export async function submitAnswerAction(
   try {
     const input = answerSchema.parse(raw);
     const actor = await getCurrentUser();
-    const { course, activity } = await getLearningContext(
+    const { course, activity, difficulty } = await getLearningContext(
       actor,
       input.courseId,
       input.activityId,
+      input.difficulty,
     );
     const feedback = await evaluateAnswer(
       course,
@@ -88,12 +100,13 @@ export async function submitAnswerAction(
     );
     await recordSubmission(actor, {
       courseId: course.id,
+      difficulty,
       courseVersion: course.version,
       activityId: activity.id,
       answer: input.answer,
       aiFeedback: feedback,
     });
-    revalidatePath("/student");
+    revalidatePath("/student", "layout");
     revalidatePath("/teacher");
     return { ok: true, data: { feedback } };
   } catch (error) {
@@ -103,10 +116,48 @@ export async function submitAnswerAction(
 
 export async function enrollAction(
   courseId: string,
+  difficulty: CourseLevel = "beginner",
 ): Promise<ActionResult<null>> {
   try {
-    await enrollCourse(await getCurrentUser(), courseId);
-    revalidatePath("/student");
+    await enrollCourse(
+      await getCurrentUser(),
+      courseId,
+      courseLevelSchema.parse(difficulty),
+    );
+    revalidatePath("/student", "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+export async function switchDifficultyAction(
+  courseId: string,
+  expectedLevel: CourseLevel,
+  nextLevel: CourseLevel,
+  version: number,
+): Promise<ActionResult<null>> {
+  try {
+    await switchCourseLevel(
+      await getCurrentUser(),
+      courseId,
+      expectedLevel,
+      nextLevel,
+      version,
+    );
+    revalidatePath("/student", "layout");
+    return { ok: true, data: null };
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+export async function leaveCourseAction(
+  courseId: string,
+): Promise<ActionResult<null>> {
+  try {
+    await leaveCourse(await getCurrentUser(), courseId);
+    revalidatePath("/student", "layout");
     return { ok: true, data: null };
   } catch (error) {
     return { ok: false, error: actionError(error) };

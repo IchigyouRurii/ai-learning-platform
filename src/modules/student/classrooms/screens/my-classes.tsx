@@ -12,8 +12,8 @@ export async function StudentClasses() {
   return (
     <>
       <PageHeading
-        eyebrow="MY CLASSES"
-        title="Your classes"
+        eyebrow="MY CLASS"
+        title="My Class"
         description="Classes your teachers have added you to."
       />
       {!result.ok ? (

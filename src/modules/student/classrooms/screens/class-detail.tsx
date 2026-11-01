@@ -44,7 +44,7 @@ export async function StudentClassDetail({ id }: { id: string }) {
     <>
       <Link href="/student/classes" className="back-link">
         <ArrowLeft size={15} />
-        Back to My Classes
+        Back to My Class
       </Link>
       <PageHeading
         eyebrow="MY CLASS"

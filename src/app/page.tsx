@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/modules/platform";
+import { getSessionState } from "@/modules/platform";
 
 export default async function HomePage() {
-  const user = await getSessionUser();
+  const state = await getSessionState();
+  if (state.status === "unavailable") redirect("/login?auth=unavailable");
+  const user = state.user;
   redirect(
     !user
       ? "/login"

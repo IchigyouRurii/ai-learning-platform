@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import type { Pool } from "pg";
+import { authenticationFailureCode } from "./session-read";
 
 // Shared by the server and migration CLI. No credentials or configuration are
 // imported by browser components; create the instance lazily on the server.
@@ -77,10 +78,20 @@ export function createAuth(
     },
     logger: {
       level: "error",
-      log: () =>
-        console.error(
-          "Authentication error. Check the connection and database initialization.",
-        ),
+      log: (_level, _message, ...args) => {
+        const code = args
+          .map((error) => authenticationFailureCode(error))
+          .find(Boolean);
+        if (code) {
+          console.warn(
+            `Authentication dependency unavailable [${code}]. Check database connectivity and schema; no credentials are logged.`,
+          );
+        } else {
+          console.error(
+            "Authentication error. Check the connection and database initialization.",
+          );
+        }
+      },
     },
   });
 }

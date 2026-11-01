@@ -1,13 +1,18 @@
 import "server-only";
 import { z } from "zod";
 import type { Course, LearningPathStep } from "@/shared/contracts";
+import {
+  courseLevelSchema,
+  lessonsAtLevel,
+  COURSE_LEVELS,
+} from "@/shared/contracts";
 import { complete, getAIProvider } from "@/shared/ai/client";
 import { PATH_SYSTEM_PROMPT, pathUserMessage } from "../prompts/path";
 
 export const pathProfileSchema = z.object({
   background: z.string().trim().min(2).max(2000),
   goals: z.string().trim().min(2).max(2000),
-  difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+  difficulty: courseLevelSchema,
   availableMinutesPerWeek: z.number().int().min(15).max(10080),
 });
 export type PathProfile = z.infer<typeof pathProfileSchema>;
@@ -21,6 +26,7 @@ export type PathCatalogItem = {
   audience: string;
   goals: string[];
   lessonCount: number;
+  levels?: import("@/shared/contracts").CourseLevel[];
 };
 
 export type GeneratedPath = {
@@ -34,13 +40,13 @@ const rawPathSchema = z.object({
     .array(
       z.object({
         courseId: z.string().min(1),
+        difficulty: courseLevelSchema.optional(),
         order: z.number().int().nonnegative(),
         targetMinutes: z.number().int().positive().max(10000),
         reason: z.string().trim().min(1).max(1000),
       }),
     )
-    .min(1)
-    .max(8),
+    .min(2),
 });
 
 export function catalogItem(course: Course): PathCatalogItem {
@@ -53,6 +59,9 @@ export function catalogItem(course: Course): PathCatalogItem {
     audience: course.audience,
     goals: course.goals,
     lessonCount: course.lessons.length,
+    levels: COURSE_LEVELS.filter(
+      (level) => lessonsAtLevel(course.lessons, level).length > 0,
+    ),
   };
 }
 
@@ -61,15 +70,23 @@ export async function generateLearningPath(
   catalog: PathCatalogItem[],
 ): Promise<GeneratedPath> {
   const profile = pathProfileSchema.parse(rawProfile);
-  if (!catalog.length)
-    throw new Error("No published courses are available yet. Ask a teacher to publish a course first.");
+  if (catalog.length < 2)
+    throw new Error(
+      "At least two Marketplace courses are needed to generate a learning path. Please try again when more courses are published.",
+    );
 
   if (getAIProvider() === "mock") {
-    const steps = catalog.slice(0, 6).map((course, index) => ({
+    const steps = catalog.slice(0, 3).map((course, index) => ({
       courseId: course.id,
       courseVersion: course.version,
+      difficulty: course.levels?.includes(profile.difficulty)
+        ? profile.difficulty
+        : (course.levels?.[0] ?? "beginner"),
       order: index,
-      targetMinutes: Math.max(30, Math.round(profile.availableMinutesPerWeek / 2)),
+      targetMinutes: Math.max(
+        30,
+        Math.round(profile.availableMinutesPerWeek / 2),
+      ),
       reason: `Mock plan: this course builds toward "${profile.goals}". A live model can personalise the order and reasons.`,
     }));
     return { title: `A starter plan for ${profile.goals}`, steps };
@@ -84,7 +101,7 @@ export async function generateLearningPath(
     { maxTokens: 2500, temperature: 0.3 },
   );
   const parsed = parsePath(text);
-  return validateAgainstCatalog(parsed, catalog);
+  return validateAgainstCatalog(parsed, catalog, profile.difficulty);
 }
 
 function parsePath(raw: string): z.infer<typeof rawPathSchema> {
@@ -93,7 +110,8 @@ function parsePath(raw: string): z.infer<typeof rawPathSchema> {
   const candidates = [fenced?.[1]?.trim() ?? trimmed];
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
-  if (first >= 0 && last > first) candidates.push(trimmed.slice(first, last + 1));
+  if (first >= 0 && last > first)
+    candidates.push(trimmed.slice(first, last + 1));
   for (const candidate of candidates) {
     try {
       const value = JSON.parse(candidate);
@@ -111,6 +129,7 @@ function parsePath(raw: string): z.infer<typeof rawPathSchema> {
 export function validateAgainstCatalog(
   raw: z.infer<typeof rawPathSchema>,
   catalog: PathCatalogItem[],
+  preferred: import("@/shared/contracts").CourseLevel = "beginner",
 ): GeneratedPath {
   const byId = new Map(catalog.map((course) => [course.id, course]));
   const seen = new Set<string>();
@@ -124,15 +143,27 @@ export function validateAgainstCatalog(
           "The generated plan references a course that is not in the catalog. Please regenerate.",
         );
       if (seen.has(step.courseId))
-        throw new Error("The generated plan repeats a course. Please regenerate.");
+        throw new Error(
+          "The generated plan repeats a course. Please regenerate.",
+        );
       seen.add(step.courseId);
+      const difficulty = step.difficulty ?? preferred;
+      if (course.levels && !course.levels.includes(difficulty))
+        throw new Error(
+          "The selected course difficulty is not available. Please regenerate.",
+        );
       return {
         courseId: course.id,
         courseVersion: course.version,
+        difficulty,
         order: index,
         targetMinutes: step.targetMinutes,
         reason: step.reason,
       };
     });
+  if (steps.length < 2)
+    throw new Error(
+      "A generated learning path must contain at least two courses. Please regenerate.",
+    );
   return { title: raw.title, steps };
 }

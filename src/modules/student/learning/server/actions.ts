@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { completeLesson, getCurrentUser } from "@/modules/platform";
-import type { ActionResult } from "@/shared/contracts";
+import {
+  courseLevelSchema,
+  type CourseLevel,
+  type ActionResult,
+} from "@/shared/contracts";
 import { actionError } from "@/shared/contracts/errors";
 
 export async function completeLessonAction(
@@ -10,6 +14,7 @@ export async function completeLessonAction(
   courseVersion: number,
   lessonId: string,
   completed = true,
+  difficulty: CourseLevel = "beginner",
 ): Promise<ActionResult<null>> {
   try {
     await completeLesson(
@@ -18,6 +23,7 @@ export async function completeLessonAction(
       courseVersion,
       lessonId,
       completed,
+      courseLevelSchema.parse(difficulty),
     );
     revalidatePath(`/student/courses/${courseId}`);
     revalidatePath("/student/progress");

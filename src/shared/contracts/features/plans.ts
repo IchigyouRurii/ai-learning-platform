@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { courseLevelSchema } from "../course";
 import {
   feature,
   idSchema,
@@ -12,7 +13,7 @@ import {
 export const learningProfileInputSchema = z.strictObject({
   background: z.string().trim().max(2000),
   goals: z.array(z.string().trim().min(1).max(500)).min(1).max(8),
-  difficulty: z.enum(["beginner", "intermediate", "advanced"]),
+  difficulty: courseLevelSchema,
   availableMinutesPerWeek: z.number().int().min(15).max(10080),
 });
 export const learningProfileSchema = learningProfileInputSchema.extend({
@@ -23,14 +24,14 @@ const steps = z
   .array(
     z.object({
       courseId: idSchema,
+      difficulty: courseLevelSchema.default("beginner"),
       courseVersion: versionSchema,
       order: z.number().int().nonnegative(),
       targetMinutes: z.number().int().positive(),
-      reason: z.string().min(1),
+      reason: z.string().trim().min(1).max(1000),
     }),
   )
   .min(1)
-  .max(100)
   .superRefine((items, ctx) => {
     if (new Set(items.map((i) => i.order)).size !== items.length)
       ctx.addIssue({ code: "custom", message: "路径步骤顺序不能重复。" });
@@ -41,7 +42,7 @@ const steps = z
       });
   });
 export const learningPathDraftSchema = z.object({
-  title: z.string().min(1).max(160),
+  title: z.string().trim().min(1).max(160),
   steps,
 });
 export const learningPathSchema = learningPathDraftSchema.extend({

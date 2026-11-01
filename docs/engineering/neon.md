@@ -48,3 +48,27 @@
 - 课程列表为空：数据库是新建的，不会自动复制 demo 数据。教师可以创建课程，或运行可选 seed。
 - 端口变化或登录来源被拒绝：更新 BETTER_AUTH_URL，或关闭占用端口的进程；本地 localhost 和 127.0.0.1 必须使用相同端口。
 - 密码不记得：当前尚未配置邮件重置流程，不提供假重置入口；后续按 Better Auth 的邮件流程接入。
+
+## Read-only connection diagnostics
+
+`bash scripts/local.sh db:check` runs SELECT-only checks. Failures now print a sanitized diagnostic code and a static explanation, never the connection string or upstream message (including DEBUG_DB mode).
+
+- CONNECTION_TIMEOUT / ETIMEDOUT: the connection did not complete in time; this alone does not prove a database outage.
+- ECONNRESET: interrupted connection; ENOTFOUND / EAI_AGAIN: DNS resolution problem.
+- 28P01 / 28000: database credential or access issue.
+- 42P01 / 42703: table or column mismatch; confirm the selected branch/database before considering a migration.
+- UNKNOWN: the underlying error was not safely classified; do not infer that data was lost.
+
+The pg-connection-string warning about future SSL semantics is independent of a connection failure. This task does not disable SSL verification or change .env.
+
+## Connection transport and recovery
+
+Neon endpoints default to the official `@neondatabase/serverless` Pool over encrypted WebSocket (port 443); other PostgreSQL hosts use TCP. `DATABASE_TRANSPORT=auto|websocket|tcp` selects the path explicitly. This remains the same Neon database, credentials, actor-scoped SQL and pinned transactions, not a database/provider fallback.
+
+`DATABASE_PROXY_URL` optionally configures an HTTP/HTTPS CONNECT proxy for this database only. Do not assume shell HTTP_PROXY automatically routes PostgreSQL or native WebSocket traffic. A configured local proxy must remain running; remove the key when deploying somewhere that does not use that proxy. Certificate validation remains enabled. No automatic cross-transport query replay or retry of writes.
+
+The pool has 5 connections, a 5s connection timeout, 5s idle reclamation and 60s maximum connection lifetime. Ended pools, configuration changes and hot-reloaded factories replace the cached pool; auth, platform, classroom and administration adapters rebind to the current pool. Only the existing bounded session read retries remain. A saved-session outage preserves cookies; the login notice performs one recovery check after 2.5s and on browser reconnection, with a manual retry button. There is no endless polling or authentication bypass.
+
+Browser extensions such as the one injecting `cz-shortcut-listen` can alter `<body>` before React hydration. A body-attribute-only hydration escape hatch handles this external alteration; child markup checks remain enabled. This is separate from database connectivity.
+
+For the existing Vercel Node deployment, explicitly select `DATABASE_TRANSPORT=tcp` and omit the machine-local proxy URL; the verified proxy WebSocket path is a local-network setup. Do not copy the local proxy configuration into cloud environment variables.

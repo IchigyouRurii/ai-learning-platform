@@ -6,6 +6,7 @@ import { ArrowRight, LoaderCircle } from "lucide-react";
 import { Button } from "@/shared/ui/components/button";
 import { Input } from "@/shared/ui/components/input";
 import { Label } from "@/shared/ui/components/label";
+import { SessionRecoveryNotice } from "./session-recovery-notice";
 import { authClient } from "./auth-client";
 import { resolveLoginEmail } from "./login-identifier";
 
@@ -16,9 +17,11 @@ const labelClassName = "text-sm leading-normal text-foreground";
 export function AuthForm({
   mode,
   configured,
+  serviceUnavailable = false,
 }: {
   mode: "login" | "register";
   configured: boolean;
+  serviceUnavailable?: boolean;
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +50,7 @@ export function AuthForm({
           and initialize the database.
         </div>
       )}
+      {configured && serviceUnavailable && <SessionRecoveryNotice />}
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -76,7 +80,9 @@ export function AuthForm({
                       ? "Your password must contain at least 10 characters."
                       : result.error.status === 429
                         ? "Too many attempts. Please try again later."
-                        : "Unable to complete this action. Check your details or try again later.",
+                        : (result.error.status ?? 0) >= 500
+                          ? "The sign-in service is temporarily unavailable. Please try again shortly."
+                          : "Unable to complete this action. Check your details or try again later.",
               );
               setPending(false);
             } else {

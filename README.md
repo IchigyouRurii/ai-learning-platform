@@ -19,6 +19,7 @@ bash scripts/local.sh dev
 ```dotenv
 APP_MODE=neon
 DATABASE_URL=项目的Neon连接串
+DATABASE_TRANSPORT=auto
 BETTER_AUTH_URL=http://localhost:3000
 BETTER_AUTH_SECRET=至少32字符的随机密钥
 AI_PROVIDER=openrouter
@@ -28,6 +29,8 @@ AI_API_KEY=OpenRouter密钥
 AI_FREE_ONLY=true
 AI_JSON_MODE=prompt
 ```
+
+Neon 默认使用加密 WebSocket 连接。若本机需通过 VPN 代理访问，在根 `.env` 增加 `DATABASE_PROXY_URL=http://127.0.0.1:你的代理端口`，并保持代理开启；不需要代理的环境不要配置此项。`DATABASE_TRANSPORT=tcp` 可显式使用原 PostgreSQL TCP 连接，系统不会在写入失败时自动换通道重试。配置更改后重启开发服务。
 
 配置由负责人提供。缺少数据库配置时保留错误提示，不自动转演示；离线演示须显式设置 `APP_MODE=demo`，模拟 AI 须显式设置 `AI_PROVIDER=mock`。测试账号 `teacher/student/admin` 的密码向负责人获取；注册账号默认为学生。
 

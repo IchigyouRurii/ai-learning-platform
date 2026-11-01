@@ -107,7 +107,7 @@ export function createSeedState(): DemoState {
         id: "ai-coding",
         title: "Communicating Requirements to AI",
         description:
-          "Practice writing clear, testable requirements for effective collaboration with AI coding agents.",
+          "Write clear, testable requirements for effective work with AI coding agents.",
         subject: "AI Programming",
         audience: "University students with no professional programming experience",
         goals: [
@@ -220,7 +220,7 @@ export function createSeedState(): DemoState {
         id: "software-basics",
         title: "Software Engineering Fundamentals",
         description:
-          "Understand the relationship between requirements, design, implementation, and validation.",
+          "Connect requirements, design, coding, and testing in software projects.",
         subject: "Software Engineering",
         audience: "Beginners exploring software development in the AI era",
         goals: [

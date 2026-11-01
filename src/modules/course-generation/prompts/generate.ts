@@ -7,7 +7,10 @@ Requirements:
 - Generate exactly 3 lessons. Every lesson contains at least one text block of 120-220 words that teaches one focused idea with a concrete example.
 - Lesson 1 ends with one open-ended reflection activity. Lesson 3 ends with exactly one quiz activity containing exactly 5 questions. Use 4 options per question, exactly one correct option per question, and a short explanation for every question. Do not use multiple-answer questions.
 - Questions must test understanding of the lesson content, not trivia. Vary the correct option position across questions.
-- Adapt vocabulary, examples, and depth to the requested difficulty (beginner, intermediate, advanced).
+- Beginner: teach prerequisites with guided examples. Advanced: assume basic knowledge and use applied multi-step problems. Expert: focus on complex scenarios, trade-offs, independent analysis and challenging assessment. Produce genuinely different teaching material for the requested level.
+- Keep the course description within 80 characters: one clear sentence describing the learning outcome.
+- Use the supplied subject exactly. Use the course description to guide scope.
+- Adapt vocabulary, examples, and depth to the requested difficulty (beginner, advanced, expert).
 - All lesson, block, activity, question, and option IDs must be unique across the whole course. Use the prefixes shown above.
 - Do not invent citations, statistics, external links, or unverifiable facts.
 - The topic may be from any subject. Write all course content in English.`;
