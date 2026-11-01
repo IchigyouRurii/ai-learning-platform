@@ -1,6 +1,10 @@
 import type { PlatformRepository, Repository } from "./repository";
 import {
   getActivities,
+  courseLevel,
+  lessonsAtLevel,
+  toCatalogCourse,
+  toPublishedCourse,
   type Course,
   type CourseDocument,
   type CourseDraft,
@@ -44,6 +48,108 @@ export function createLocalPlatformRepository(
   store: Repository,
 ): PlatformRepository {
   return {
+    async listOwnedCatalog(actor) {
+      if (!actor?.id || !["teacher", "student"].includes(actor.role))
+        throw new Error("An author account is required.");
+      return (await store.read()).courses
+        .filter((course) => course.ownerId === actor.id)
+        .map((course) => toCatalogCourse(publishedView(course), actor.name));
+    },
+    async canDeleteOwnedCourse(courseId, ownerId) {
+      const state = await store.read();
+      return (
+        state.courses.some(
+          (course) =>
+            course.id === courseId &&
+            course.ownerId === ownerId &&
+            course.visibility === "personal",
+        ) &&
+        !state.enrollments.some(
+          (item) => item.courseId === courseId && item.studentId !== ownerId,
+        )
+      );
+    },
+    async listCatalog(actor) {
+      if (!actor?.id || !["teacher", "student", "admin"].includes(actor.role))
+        throw new Error("Please sign in first.");
+      const state = await store.read();
+      return state.courses
+        .filter(
+          (course) =>
+            course.status === "published" &&
+            course.visibility === "cohort" &&
+            course.moderationStatus !== "withdrawn",
+        )
+        .map((course) =>
+          toCatalogCourse(
+            publishedView(course),
+            course.ownerId === actor.id ? actor.name : "Course author",
+          ),
+        );
+    },
+    async findPublishedCourse(actor, id) {
+      if (!actor?.id || !["teacher", "student", "admin"].includes(actor.role))
+        throw new Error("Please sign in first.");
+      const course = (await store.read()).courses.find(
+        (item) =>
+          item.id === id &&
+          item.status === "published" &&
+          item.visibility === "cohort" &&
+          item.moderationStatus !== "withdrawn",
+      );
+      return course
+        ? toPublishedCourse(
+            publishedView(course),
+            course.ownerId === actor.id ? actor.name : "Course author",
+          )
+        : null;
+    },
+    async getStudentCourseContext(actor, courseId) {
+      if (!actor?.id || actor.role !== "student")
+        throw new Error("Student access required.");
+      const state = await store.read();
+      const stored = state.courses.find(
+        (course) =>
+          course.id === courseId &&
+          course.status === "published" &&
+          course.moderationStatus !== "withdrawn" &&
+          (course.visibility === "cohort" ||
+            (course.visibility === "personal" && course.ownerId === actor.id)),
+      );
+      if (!stored) return null;
+      const course = publishedView(stored);
+      const enrollment = state.enrollments.find(
+        (item) => item.courseId === courseId && item.studentId === actor.id,
+      );
+      const enrolled = Boolean(enrollment);
+      const activeLevel = enrollment
+        ? courseLevel(enrollment.difficulty)
+        : null;
+      return {
+        course,
+        enrolled,
+        activeLevel,
+        classManaged: false,
+        submissions: enrolled
+          ? state.submissions.filter(
+              (item) =>
+                item.courseId === courseId &&
+                item.studentId === actor.id &&
+                item.courseVersion === course.version &&
+                courseLevel(item.difficulty) === activeLevel,
+            )
+          : [],
+        lessonCompletions: enrolled
+          ? (state.lessonCompletions ?? []).filter(
+              (item) =>
+                item.courseId === courseId &&
+                item.studentId === actor.id &&
+                item.courseVersion === course.version &&
+                courseLevel(item.difficulty) === activeLevel,
+            )
+          : [],
+      };
+    },
     async getWorkspace(actor) {
       const state = await store.read();
       const courses = state.courses
@@ -110,6 +216,103 @@ export function createLocalPlatformRepository(
         (item) => item.courseId === courseId && item.studentId === studentId,
       );
     },
+    async getActiveCourseLevel(courseId, studentId) {
+      const state = await store.read();
+      const enrollment = state.enrollments.find(
+        (item) => item.courseId === courseId && item.studentId === studentId,
+      );
+      const course = state.courses.find(
+        (item) =>
+          item.id === courseId &&
+          item.status === "published" &&
+          item.moderationStatus !== "withdrawn" &&
+          (item.visibility === "cohort" || item.ownerId === studentId),
+      );
+      return enrollment && course ? courseLevel(enrollment.difficulty) : null;
+    },
+    async switchCourseLevel(
+      courseId,
+      studentId,
+      expectedLevel,
+      nextLevel,
+      courseVersion,
+    ) {
+      await store.mutate((state) => {
+        const stored = state.courses.find((item) => item.id === courseId);
+        const course = stored ? publishedView(stored) : null;
+        const enrollment = state.enrollments.find(
+          (item) => item.courseId === courseId && item.studentId === studentId,
+        );
+        if (
+          !course ||
+          !enrollment ||
+          courseLevel(enrollment.difficulty) !== expectedLevel ||
+          course.version !== courseVersion ||
+          course.status !== "published" ||
+          course.moderationStatus === "withdrawn" ||
+          (course.visibility === "personal" && course.ownerId !== studentId) ||
+          !lessonsAtLevel(course.lessons, nextLevel).length
+        )
+          throw new Error(
+            "The course or active difficulty has changed. Refresh and try again.",
+          );
+        enrollment.difficulty = nextLevel;
+      });
+    },
+    async deleteOwnedCourse(courseId, ownerId) {
+      await store.mutate((state) => {
+        if (
+          !state.courses.some(
+            (course) =>
+              course.id === courseId &&
+              course.ownerId === ownerId &&
+              course.visibility === "personal",
+          )
+        )
+          throw new Error("You can only delete courses you created.");
+        if (
+          state.enrollments.some(
+            (item) => item.courseId === courseId && item.studentId !== ownerId,
+          )
+        )
+          throw new Error(
+            "This course is linked to another learner and cannot be deleted.",
+          );
+        state.courses = state.courses.filter(
+          (course) => course.id !== courseId,
+        );
+        state.enrollments = state.enrollments.filter(
+          (item) => item.courseId !== courseId,
+        );
+        state.submissions = state.submissions.filter(
+          (item) => item.courseId !== courseId,
+        );
+        state.feedback = state.feedback.filter(
+          (item) => item.courseId !== courseId,
+        );
+        state.lessonCompletions = state.lessonCompletions?.filter(
+          (item) => item.courseId !== courseId,
+        );
+        state.generationRecords = state.generationRecords?.filter(
+          (item) => item.courseId !== courseId,
+        );
+      });
+    },
+    async leaveCourse(courseId, studentId) {
+      await store.mutate((state) => {
+        const course = state.courses.find((item) => item.id === courseId);
+        if (
+          !course ||
+          course.visibility !== "cohort" ||
+          course.ownerId === studentId
+        )
+          throw new Error("Unable to leave this course.");
+        state.enrollments = state.enrollments.filter(
+          (item) =>
+            !(item.courseId === courseId && item.studentId === studentId),
+        );
+      });
+    },
     async isCourseManagedByClass() {
       return false;
     },
@@ -132,6 +335,7 @@ export function createLocalPlatformRepository(
               courseId: stored.id,
               studentId: stored.ownerId,
               joinedAt: new Date().toISOString(),
+              difficulty: "beginner",
             });
         }
         return stored;
@@ -173,7 +377,7 @@ export function createLocalPlatformRepository(
         return publishedView(course);
       });
     },
-    async enroll(courseId, studentId) {
+    async enroll(courseId, studentId, difficulty = "beginner") {
       await store.mutate((state) => {
         const course = state.courses.find((item) => item.id === courseId);
         if (
@@ -193,10 +397,18 @@ export function createLocalPlatformRepository(
             courseId,
             studentId,
             joinedAt: new Date().toISOString(),
+            difficulty,
           });
       });
     },
-    async completeLesson(courseId, courseVersion, lessonId, studentId, completed = true) {
+    async completeLesson(
+      courseId,
+      courseVersion,
+      lessonId,
+      studentId,
+      completed = true,
+      difficulty = "beginner",
+    ) {
       await store.mutate((state) => {
         const stored = state.courses.find((item) => item.id === courseId);
         const course = stored ? publishedView(stored) : undefined;
@@ -213,13 +425,27 @@ export function createLocalPlatformRepository(
           )
         )
           throw new Error("Enroll in this course first.");
-        if (!course.lessons.some((lesson) => lesson.id === lessonId))
+        const active = state.enrollments.find(
+          (item) => item.courseId === courseId && item.studentId === studentId,
+        );
+        if (courseLevel(active?.difficulty) !== difficulty)
+          throw new Error("Active difficulty changed. Refresh and try again.");
+        if (
+          !lessonsAtLevel(course.lessons, difficulty).some(
+            (lesson) => lesson.id === lessonId,
+          )
+        )
           throw new Error("This lesson does not belong to the course.");
         if (!completed) {
           state.lessonCompletions = (state.lessonCompletions ?? []).filter(
-            (item) => !(item.courseId === courseId &&
-              item.courseVersion === courseVersion &&
-              item.lessonId === lessonId && item.studentId === studentId),
+            (item) =>
+              !(
+                item.courseId === courseId &&
+                item.courseVersion === courseVersion &&
+                item.lessonId === lessonId &&
+                item.studentId === studentId &&
+                courseLevel(item.difficulty) === difficulty
+              ),
           );
           return;
         }
@@ -230,7 +456,8 @@ export function createLocalPlatformRepository(
               item.courseId === courseId &&
               item.courseVersion === courseVersion &&
               item.lessonId === lessonId &&
-              item.studentId === studentId,
+              item.studentId === studentId &&
+              courseLevel(item.difficulty) === difficulty,
           )
         ) {
           completions.push({
@@ -238,6 +465,7 @@ export function createLocalPlatformRepository(
             courseVersion,
             lessonId,
             studentId,
+            difficulty,
             completedAt: new Date().toISOString(),
           });
           state.lessonCompletions = completions;
@@ -269,6 +497,23 @@ export function createLocalPlatformRepository(
           )
         )
           throw new Error("Please enroll in this course first.");
+        const active = state.enrollments.find(
+          (item) =>
+            item.courseId === course.id &&
+            item.studentId === submission.studentId,
+        );
+        if (
+          courseLevel(active?.difficulty) !==
+            courseLevel(submission.difficulty) ||
+          !getActivities({
+            ...course,
+            lessons: lessonsAtLevel(
+              course.lessons,
+              courseLevel(submission.difficulty),
+            ),
+          }).some((item) => item.id === submission.activityId)
+        )
+          throw new Error("Active difficulty changed. Refresh and try again.");
         state.submissions.push(submission);
         return submission;
       });
@@ -309,8 +554,34 @@ export function createLocalPlatformRepository(
     },
     async saveLearningPath(path: LearningPathRecord) {
       return store.mutate((state) => {
+        for (const step of path.steps) {
+          const course = state.courses.find(
+            (course) =>
+              course.id === step.courseId &&
+              course.version === step.courseVersion &&
+              course.status === "published" &&
+              course.visibility === "cohort" &&
+              course.moderationStatus !== "withdrawn",
+          );
+          if (
+            !course ||
+            !lessonsAtLevel(
+              publishedView(course).lessons,
+              courseLevel(step.difficulty),
+            ).length
+          )
+            throw new Error(
+              "The path or one of its courses is no longer available.",
+            );
+        }
         state.learningPaths ??= [];
-        state.learningPaths.unshift(path);
+        const existing = state.learningPaths.find(
+          (item) => item.id === path.id,
+        );
+        if (existing && existing.ownerId !== path.ownerId)
+          throw new Error("This learning path is not available to edit.");
+        if (existing) Object.assign(existing, path);
+        else state.learningPaths.unshift(path);
         return path;
       });
     },

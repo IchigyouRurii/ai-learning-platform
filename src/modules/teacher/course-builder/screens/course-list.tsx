@@ -1,13 +1,16 @@
-import { getCurrentUser, getWorkspace } from "@/modules/platform";
+import {
+  getCurrentUser,
+  getOwnedCourseCatalog,
+  getCourseCatalog,
+} from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
-import { CourseCatalog } from "../components/course-catalog";
+import { CourseCatalog } from "@/modules/platform/components/course-catalog";
 
 export type CatalogSearch = {
   q?: string | string[];
   subject?: string | string[];
 };
 export async function TeacherCourseList({
-  searchParams,
   creations = false,
 }: {
   searchParams: Promise<CatalogSearch>;
@@ -15,17 +18,10 @@ export async function TeacherCourseList({
 }) {
   const user = await getCurrentUser();
   if (user.role !== "teacher") return <RoleGate expected="teacher" />;
-  const [workspace, search] = await Promise.all([
-    getWorkspace(user),
-    searchParams,
-  ]);
+  const courses = creations
+    ? await getOwnedCourseCatalog(user)
+    : await getCourseCatalog(user);
   return (
-    <CourseCatalog
-      courses={workspace.courses}
-      author={user}
-      query={typeof search.q === "string" ? search.q : ""}
-      subject={typeof search.subject === "string" ? search.subject : "All"}
-      creations={creations}
-    />
+    <CourseCatalog courses={courses} author={user} creations={creations} />
   );
 }

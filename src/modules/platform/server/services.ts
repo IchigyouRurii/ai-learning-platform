@@ -1,7 +1,14 @@
 import "server-only";
+import { cache } from "react";
 import { randomUUID } from "node:crypto";
 import {
   courseDraftSchema,
+  courseLevel,
+  courseLevelSchema,
+  lessonsAtLevel,
+  type CourseLevel,
+  validateCourseIntroduction,
+  catalogCourseSchema,
   getActivities,
   type CourseDraft,
   type Course,
@@ -11,13 +18,50 @@ import {
   type User,
   type Submission,
 } from "@/shared/contracts";
+import { learningPathDraftSchema } from "@/shared/contracts/features/plans";
+import { z } from "zod";
 import { getRepository } from "@/shared/database";
 import { assertStudent, assertTeacher } from "./access";
 
-export async function getWorkspace(actor: User) {
+export const getWorkspace = cache(async (actor: User) => {
   if (actor.role === "teacher") assertTeacher(actor);
   else assertStudent(actor);
   return getRepository().getWorkspace(actor);
+});
+
+export async function getStudentCourseContext(actor: User, courseId: string) {
+  assertStudent(actor);
+  const id = catalogCourseSchema.shape.id.max(200).safeParse(courseId);
+  if (!id.success) return null;
+  return getRepository().getStudentCourseContext(actor, id.data);
+}
+
+export async function getOwnedCourseCatalog(actor: User) {
+  if (!actor?.id || !["teacher", "student"].includes(actor.role))
+    throw new Error("An author account is required.");
+  return getRepository().listOwnedCatalog(actor);
+}
+
+export async function canDeleteOwnedCourse(actor: User, courseId: string) {
+  if (!actor?.id || actor.role !== "student") return false;
+  return getRepository().canDeleteOwnedCourse(
+    catalogCourseSchema.shape.id.max(200).parse(courseId),
+    actor.id,
+  );
+}
+
+export async function getCourseCatalog(actor: User) {
+  if (!actor?.id || !["teacher", "student", "admin"].includes(actor.role))
+    throw new Error("Please sign in first.");
+  return getRepository().listCatalog(actor);
+}
+
+export async function getPublishedCourse(actor: User, id: string) {
+  if (!actor?.id || !["teacher", "student", "admin"].includes(actor.role))
+    throw new Error("Please sign in first.");
+  const parsed = catalogCourseSchema.shape.id.max(200).safeParse(id);
+  if (!parsed.success) return null;
+  return getRepository().findPublishedCourse(actor, parsed.data);
 }
 
 async function requireCourse(id: string) {
@@ -34,8 +78,12 @@ async function requireLearningAccess(actor: User, course: Course) {
     );
   if (course.status !== "published")
     throw new Error("This course has not been published.");
-  if (!(await getRepository().isEnrolled(course.id, actor.id)))
-    throw new Error("Please enroll in this course first.");
+  const activeLevel = await getRepository().getActiveCourseLevel(
+    course.id,
+    actor.id,
+  );
+  if (!activeLevel) throw new Error("Please enroll in this course first.");
+  return activeLevel;
 }
 
 function assertCanAuthor(
@@ -58,6 +106,7 @@ export async function createCourse(
   options: { visibility?: Course["visibility"]; publish?: boolean } = {},
 ): Promise<Course> {
   const parsed = courseDraftSchema.parse(input);
+  parsed.description = validateCourseIntroduction(parsed.description);
   let visibility: Course["visibility"];
   let published: boolean;
   if (actor.role === "teacher") {
@@ -102,12 +151,17 @@ export async function updateCourseDraft(
   expectedDraftRevision: number,
   content: CourseDraft,
 ): Promise<CourseDocument> {
-  await getCourseDocumentForAuthor(actor, id);
+  const document = await getCourseDocumentForAuthor(actor, id);
+  const parsed = courseDraftSchema.parse(content);
+  parsed.description = validateCourseIntroduction(
+    parsed.description,
+    document.content.description,
+  );
   return getRepository().updateCourseDraft(
     id,
     actor.id,
     expectedDraftRevision,
-    courseDraftSchema.parse(content),
+    parsed,
   );
 }
 
@@ -123,7 +177,11 @@ export async function isCourseManagedByClass(courseId: string) {
   return getRepository().isCourseManagedByClass(courseId);
 }
 
-export async function enrollCourse(actor: User, id: string) {
+export async function enrollCourse(
+  actor: User,
+  id: string,
+  difficulty: CourseLevel = "beginner",
+) {
   assertStudent(actor);
   const course = await requireCourse(id);
   if (await getRepository().isCourseManagedByClass(id))
@@ -138,7 +196,51 @@ export async function enrollCourse(actor: User, id: string) {
     (course.visibility !== "cohort" && !personalOwner)
   )
     throw new Error("This course is not open for enrollment.");
-  await getRepository().enroll(id, actor.id);
+  const selected = courseLevelSchema.parse(difficulty);
+  if (!lessonsAtLevel(course.lessons, selected).length)
+    throw new Error("This difficulty has no published materials yet.");
+  const active = await getRepository().getActiveCourseLevel(id, actor.id);
+  if (active && active !== selected)
+    throw new Error("Already enrolled. Use Switch difficulty instead.");
+  await getRepository().enroll(id, actor.id, selected);
+}
+
+export async function deleteOwnedCourse(actor: User, courseId: string) {
+  if (!actor?.id || actor.role !== "student")
+    throw new Error(
+      "Only students can delete their own personal courses. Teacher courses can only be withdrawn by an administrator.",
+    );
+  await getRepository().deleteOwnedCourse(
+    catalogCourseSchema.shape.id.max(200).parse(courseId),
+    actor.id,
+  );
+}
+
+export async function leaveCourse(actor: User, courseId: string) {
+  assertStudent(actor);
+  const id = catalogCourseSchema.shape.id.max(200).parse(courseId);
+  if (await getRepository().isCourseManagedByClass(id))
+    throw new Error(
+      "Class courses cannot be left. Please contact your teacher.",
+    );
+  await getRepository().leaveCourse(id, actor.id);
+}
+
+export async function switchCourseLevel(
+  actor: User,
+  id: string,
+  expectedLevel: CourseLevel,
+  nextLevel: CourseLevel,
+  version: number,
+) {
+  assertStudent(actor);
+  await getRepository().switchCourseLevel(
+    catalogCourseSchema.shape.id.max(200).parse(id),
+    actor.id,
+    courseLevelSchema.parse(expectedLevel),
+    courseLevelSchema.parse(nextLevel),
+    catalogCourseSchema.shape.version.parse(version),
+  );
 }
 
 export async function completeLesson(
@@ -147,14 +249,20 @@ export async function completeLesson(
   courseVersion: number,
   lessonId: string,
   completed = true,
+  expectedLevel?: CourseLevel,
 ) {
   assertStudent(actor);
   const course = await requireCourse(courseId);
   if (course.status !== "published" || course.version !== courseVersion)
     throw new Error("课程版本已变化，请刷新后重试。");
-  if (!(await getRepository().isEnrolled(courseId, actor.id)))
-    throw new Error("请先加入这门课程。");
-  if (!course.lessons.some((lesson) => lesson.id === lessonId))
+  const activeLevel = await requireLearningAccess(actor, course);
+  if (expectedLevel && expectedLevel !== activeLevel)
+    throw new Error("Active difficulty changed. Refresh and try again.");
+  if (
+    !lessonsAtLevel(course.lessons, activeLevel).some(
+      (lesson) => lesson.id === lessonId,
+    )
+  )
     throw new Error("章节不属于这门课程。");
   await getRepository().completeLesson(
     courseId,
@@ -162,6 +270,7 @@ export async function completeLesson(
     lessonId,
     actor.id,
     completed,
+    activeLevel,
   );
 }
 
@@ -169,13 +278,19 @@ export async function getLearningContext(
   actor: User,
   courseId: string,
   activityId: string,
+  expectedLevel?: CourseLevel,
 ) {
   const course = await requireCourse(courseId);
-  await requireLearningAccess(actor, course);
-  const activity = getActivities(course).find((item) => item.id === activityId);
+  const activeLevel = await requireLearningAccess(actor, course);
+  if (expectedLevel && expectedLevel !== activeLevel)
+    throw new Error("Active difficulty changed. Refresh and try again.");
+  const activity = getActivities({
+    ...course,
+    lessons: lessonsAtLevel(course.lessons, activeLevel),
+  }).find((item) => item.id === activityId);
   if (!activity)
     throw new Error("This activity does not belong to the course.");
-  return { course, activity };
+  return { course, activity, difficulty: activeLevel };
 }
 
 export async function recordSubmission(
@@ -183,16 +298,22 @@ export async function recordSubmission(
   input: Omit<Submission, "id" | "studentId" | "createdAt">,
 ) {
   const course = await requireCourse(input.courseId);
-  await requireLearningAccess(actor, course);
+  const activeLevel = await requireLearningAccess(actor, course);
+  if (input.difficulty && input.difficulty !== activeLevel)
+    throw new Error("Active difficulty changed. Refresh and try again.");
   if (
     course.version !== input.courseVersion ||
-    !getActivities(course).some((item) => item.id === input.activityId)
+    !getActivities({
+      ...course,
+      lessons: lessonsAtLevel(course.lessons, activeLevel),
+    }).some((item) => item.id === input.activityId)
   )
     throw new Error(
       "The course version or activity has changed. Refresh and try again.",
     );
   return getRepository().insertSubmission({
     ...input,
+    difficulty: activeLevel,
     id: randomUUID(),
     studentId: actor.id,
     createdAt: new Date().toISOString(),
@@ -269,15 +390,54 @@ export async function recordGeneration(
 
 export async function saveLearningPath(
   actor: User,
-  input: Omit<LearningPathRecord, "id" | "ownerId" | "createdAt" | "updatedAt">,
+  input: Omit<
+    LearningPathRecord,
+    "id" | "ownerId" | "createdAt" | "updatedAt"
+  > & { id?: string },
 ) {
   assertStudent(actor);
+  const parsed = learningPathDraftSchema
+    .extend({ id: z.string().min(1).max(200).optional() })
+    .parse(input);
+  const repository = getRepository();
+  const catalog = new Map(
+    (await repository.listCatalog(actor)).map((course) => [course.id, course]),
+  );
+  const steps = await Promise.all(
+    parsed.steps.map(async (step, order) => {
+      const item = catalog.get(step.courseId);
+      if (!item || item.version !== step.courseVersion)
+        throw new Error(
+          "A course has changed or is no longer available. Reopen the planner and review your courses.",
+        );
+      const context = await repository.getStudentCourseContext(
+        actor,
+        step.courseId,
+      );
+      if (
+        !context ||
+        !lessonsAtLevel(context.course.lessons, step.difficulty).length
+      )
+        throw new Error(
+          "The selected difficulty is not available for this course.",
+        );
+      return { ...step, order };
+    }),
+  );
+  const existing = parsed.id
+    ? (await repository.listLearningPaths(actor.id)).find(
+        (path) => path.id === parsed.id,
+      )
+    : null;
+  if (parsed.id && !existing)
+    throw new Error("This learning path is not available to edit.");
   const now = new Date().toISOString();
-  return getRepository().saveLearningPath({
-    ...input,
-    id: randomUUID(),
+  return repository.saveLearningPath({
+    title: parsed.title,
+    steps,
+    id: existing?.id ?? randomUUID(),
     ownerId: actor.id,
-    createdAt: now,
+    createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   });
 }
@@ -286,15 +446,21 @@ export function calculateProgress(
   course: Course,
   submissions: Submission[],
   studentId: string,
+  difficulty?: CourseLevel,
 ) {
-  const activities = getActivities(course);
+  const activities = getActivities(
+    difficulty
+      ? { ...course, lessons: lessonsAtLevel(course.lessons, difficulty) }
+      : course,
+  );
   const completed = new Set(
     submissions
       .filter(
         (item) =>
           item.courseId === course.id &&
           item.courseVersion === course.version &&
-          item.studentId === studentId,
+          item.studentId === studentId &&
+          (!difficulty || courseLevel(item.difficulty) === difficulty),
       )
       .map((item) => item.activityId),
   );

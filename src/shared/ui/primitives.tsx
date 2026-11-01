@@ -1,3 +1,4 @@
+import { subjectLabel } from "@/shared/ui/course-catalog";
 import type { ReactNode } from "react";
 import {
   ArrowUpRight,
@@ -112,7 +113,9 @@ export function CourseCard({
         aria-label={`Open course: ${course.title}`}
       >
         <div className="art-grid" aria-hidden="true" />
-        <span className="course-art-label">{course.subject}</span>
+        <span className="course-art-label">
+          {subjectLabel(course.subject, course.title)}
+        </span>
         <CoverIcon className="art-symbol" aria-hidden="true" strokeWidth={1} />
         <span className="art-number">
           MINI COURSE · {String(index + 1).padStart(2, "0")}

@@ -139,7 +139,9 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - `learningProfiles.getMine / updateMine`：背景、目标、难度、每周可用分钟数。
 - `learningPaths.generate / save / listMine / getMine`：建议草稿、保存路径、本人路径列表及详情。
 
-路径步骤明确记录 courseId、courseVersion、order、targetMinutes、reason。AI 只能推荐已授权且可学习的现有课程，不能凭空编造 ID；保存时逐个重新检查。路径本身不会授予访问权。默认一个路径不重复包含同一课程。
+路径步骤明确记录 courseId、courseVersion、difficulty（beginner / advanced / expert）、order、targetMinutes、reason。AI 只能推荐已授权且可学习的现有课程，不能凭空编造 ID；保存时逐个重新检查。路径本身不会授予访问权。默认一个路径不重复包含同一课程。
+
+当前学生路径页面已通过既有服务支持多路径列表、课程排序编辑、逐门难度及一键加入；预留的 `platformExtensions.learningPaths` 保持 reserved。具体数据和权限见 [学习路径](learning-paths.md)。
 
 ### 7. 材料与对象存储
 
@@ -236,3 +238,5 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 - 讨论区新增软删除和四种表情：作者可删自己的内容；教师不能删学生内容；每条消息每用户一个表情，同表情取消/不同切换；已删除消息不再接受表态；删除后保留作者、时间和线程占位。
 - 新增内容批注：学生按内容块留下私密疑问/批注，教师回复或解决；教师未处理数按 `status=open`，学生未读按教师已处理且未展开；分类、引用文字和课程版本均保留。
 - 相关测试覆盖章节完成、quiz 最好成绩/60% 通过、软删除作者限制、表情切换/取消/计数、课件批注权限与已读、班级/讨论区回归。
+
+现有学生加入接口现支持每门课唯一当前难度与显式切换；enrollment、submissions、lesson_completions 的 difficulty 与版本共同约束学习记录。实现与迁移见 [课程难度](course-difficulty.md)，reserved 扩展入口状态不因此改变。

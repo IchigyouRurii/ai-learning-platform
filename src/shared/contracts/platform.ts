@@ -1,13 +1,15 @@
-import type { Course, CourseDraft } from "./course";
+import type { Course, CourseDraft, CourseLevel } from "./course";
 
 export type Role = "teacher" | "student" | "admin";
 export type User = { id: string; name: string; role: Role };
 export type Enrollment = {
+  difficulty?: CourseLevel;
   courseId: string;
   studentId: string;
   joinedAt: string;
 };
 export type Submission = {
+  difficulty?: CourseLevel;
   id: string;
   courseId: string;
   courseVersion: number;
@@ -20,6 +22,7 @@ export type Submission = {
   createdAt: string;
 };
 export type LessonCompletionRecord = {
+  difficulty?: CourseLevel;
   courseId: string;
   courseVersion: number;
   lessonId: string;
@@ -50,6 +53,7 @@ export type CourseDocument = {
   withdrawalReason?: string;
 };
 export type LearningPathStep = {
+  difficulty?: CourseLevel;
   courseId: string;
   courseVersion: number;
   order: number;
@@ -88,3 +92,13 @@ export type DemoState = {
 export type Workspace = DemoState & { members: User[] };
 export type ActionResult<T> =
   { ok: true; data: T } | { ok: false; error: string };
+
+/** Server-only detail context: one visible published course and the actor's records. */
+export type StudentCourseContext = {
+  activeLevel: CourseLevel | null;
+  course: Course;
+  enrolled: boolean;
+  classManaged: boolean;
+  submissions: Submission[];
+  lessonCompletions: LessonCompletionRecord[];
+};

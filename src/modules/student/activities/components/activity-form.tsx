@@ -1,4 +1,5 @@
 "use client";
+import type { CourseLevel } from "@/shared/contracts";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MessageCircle, Send, Sparkles } from "lucide-react";
@@ -7,11 +8,13 @@ import { submitAnswerAction } from "../server/actions";
 
 export function ActivityForm({
   courseId,
+  difficulty = "beginner",
   activity,
   latest,
   history = [],
 }: {
   courseId: string;
+  difficulty?: CourseLevel;
   activity: Activity;
   latest?: Submission;
   history?: Submission[];
@@ -42,6 +45,7 @@ export function ActivityForm({
           startTransition(async () => {
             const result = await submitAnswerAction({
               courseId,
+              difficulty,
               activityId: activity.id,
               answer,
               background,

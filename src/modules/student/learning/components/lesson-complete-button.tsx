@@ -1,4 +1,5 @@
 "use client";
+import type { CourseLevel } from "@/shared/contracts";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -11,11 +12,13 @@ export function LessonCompleteButton({
   courseVersion,
   lessonId,
   completed,
+  difficulty = "beginner",
 }: {
   courseId: string;
   courseVersion: number;
   lessonId: string;
   completed: boolean;
+  difficulty?: CourseLevel;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -38,6 +41,7 @@ export function LessonCompleteButton({
               courseVersion,
               lessonId,
               !completed,
+              difficulty,
             );
             if (result.ok) router.refresh();
             else setError(result.error);
@@ -45,7 +49,11 @@ export function LessonCompleteButton({
         }}
       >
         {completed && <CheckCircle2 size={14} />}
-        {pending ? "Saving…" : completed ? "Completed · Undo" : "Mark lesson complete"}
+        {pending
+          ? "Saving…"
+          : completed
+            ? "Completed · Undo"
+            : "Mark lesson complete"}
       </Button>
       {error && (
         <span className="error-text text-xs" role="alert">

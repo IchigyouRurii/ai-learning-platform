@@ -16,7 +16,9 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      {/* Browser extensions may add body attributes before hydration (e.g. cz-shortcut-listen).
+          Limit this compatibility escape hatch to body attributes; child rendering stays checked. */}
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

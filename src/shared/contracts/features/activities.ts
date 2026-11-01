@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { contentBlockSchema, courseDraftSchema } from "../course";
+import {
+  contentBlockSchema,
+  courseDraftSchema,
+  courseLevelSchema,
+} from "../course";
 import {
   feature,
   idSchema,
@@ -93,6 +97,7 @@ export const learnerCourseSchema = z.object({
   lessons: z
     .array(
       z.object({
+        difficulty: courseLevelSchema.optional(),
         id: idSchema,
         title: z.string(),
         blocks: z.array(
@@ -111,7 +116,7 @@ export const learnerCourseSchema = z.object({
       }),
     )
     .min(1)
-    .max(12),
+    .max(36),
 });
 export const authoringActivitySchema = z
   .object({

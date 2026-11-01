@@ -1,6 +1,15 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { getMigrations } from "better-auth/db/migration";
 import { createAuth } from "@/modules/platform/server/auth-config";
+import { readSessionWithRetry } from "@/modules/platform/server/session-read";
 import { resolveLoginEmail } from "@/modules/platform/auth/login-identifier";
 import { createTestPostgres } from "./helpers/postgres";
 
@@ -60,6 +69,60 @@ function sessionCookie(response: Response) {
 }
 
 describe("real authentication with PostgreSQL", () => {
+  it("recovers a real Better Auth session after a transient adapter disconnect", async () => {
+    const registration = await signup();
+    const cookie = sessionCookie(registration);
+    const context = await auth.$context;
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const lookup = vi
+      .spyOn(context.internalAdapter, "findSession")
+      .mockRejectedValueOnce(
+        Object.assign(new Error("private connection details"), {
+          code: "ECONNRESET",
+        }),
+      );
+    try {
+      const result = await readSessionWithRetry(() =>
+        auth.api.getSession({ headers: new Headers({ cookie }) }),
+      );
+      expect(result.available).toBe(true);
+      expect(result.session?.user.email).toBe(email);
+      expect(lookup).toHaveBeenCalledTimes(2);
+      expect(warning.mock.calls.flat().join(" ")).toContain("ECONNRESET");
+      expect(warning.mock.calls.flat().join(" ")).not.toContain(
+        "private connection details",
+      );
+    } finally {
+      lookup.mockRestore();
+      warning.mockRestore();
+    }
+  });
+  it("retains the saved session after a persistent lookup outage", async () => {
+    const registration = await signup();
+    const cookie = sessionCookie(registration);
+    const context = await auth.$context;
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const lookup = vi
+      .spyOn(context.internalAdapter, "findSession")
+      .mockRejectedValue(
+        Object.assign(new Error("connection lost"), { code: "ECONNRESET" }),
+      );
+    try {
+      expect(
+        await readSessionWithRetry(() =>
+          auth.api.getSession({ headers: new Headers({ cookie }) }),
+        ),
+      ).toEqual({ available: false, session: null });
+      expect(lookup).toHaveBeenCalledTimes(2);
+    } finally {
+      lookup.mockRestore();
+      warning.mockRestore();
+    }
+    expect(
+      (await auth.api.getSession({ headers: new Headers({ cookie }) }))?.user
+        .email,
+    ).toBe(email);
+  });
   it.each(["teacher", "student", "admin"] as const)(
     "signs in the %s test alias with its provisioned short password and server role",
     async (role) => {

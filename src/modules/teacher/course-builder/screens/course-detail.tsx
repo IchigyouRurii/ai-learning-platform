@@ -1,3 +1,5 @@
+import { courseLevel, lessonsAtLevel } from "@/shared/contracts";
+import { CourseLevelNavigation } from "@/shared/ui/course-level-navigation";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
@@ -7,36 +9,46 @@ import { Badge, PageHeading } from "@/shared/ui/primitives";
 import { TeacherCourseDiscussion } from "@/modules/teacher/discussions/screens/course-discussion";
 import { PublishButton } from "../components/publish-button";
 
-export async function TeacherCourseDetail({ id }: { id: string }) {
+export async function TeacherCourseDetail({
+  id,
+  level: rawLevel,
+}: {
+  id: string;
+  level?: string;
+}) {
   const user = await getCurrentUser();
   if (user.role !== "teacher") return <RoleGate expected="teacher" />;
   const document = await getCourseDocumentForAuthor(user, id).catch(() => null);
   if (!document) notFound();
   const course = document.content;
+  const level = courseLevel(rawLevel);
+  const lessons = lessonsAtLevel(course.lessons, level);
   return (
     <>
       <Link href="/teacher/creations" className="back-link">
         <ArrowLeft size={15} />
-        Back to My Creations
+        Back to My Creation
       </Link>
       <PageHeading
         eyebrow="COURSE PREVIEW"
         title={course.title}
         description={course.description}
         action={
-          <div className="heading-actions">
+          <div className="teacher-course-actions">
             <Badge tone={document.publishedVersion ? "green" : "amber"}>
               {document.publishedVersion
                 ? `Published v${document.publishedVersion}`
                 : "Unpublished draft"}
             </Badge>
-            <Link
-              href={`/teacher/courses/${id}/edit`}
-              className="button secondary"
-            >
-              <Pencil size={15} />
-              Edit course
-            </Link>
+            <div className="teacher-course-action-buttons">
+              <Link
+                href={`/teacher/courses/${id}/edit?level=${level}`}
+                className="button secondary"
+              >
+                <Pencil size={15} />
+                Edit course
+              </Link>
+            </div>
           </div>
         }
       />
@@ -50,9 +62,15 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
           </p>
         </section>
       )}
+      <CourseLevelNavigation value={level} href={`/teacher/courses/${id}`} />
+      {!lessons.length && (
+        <section className="panel mb-6">
+          <p>No {level} materials have been generated yet.</p>
+        </section>
+      )}
       <div className="detail-grid">
         <div>
-          {course.lessons.map((lesson, index) => (
+          {lessons.map((lesson, index) => (
             <section className="panel lesson-panel" key={lesson.id}>
               <p className="eyebrow">
                 LESSON {String(index + 1).padStart(2, "0")}
@@ -124,9 +142,6 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
             ))}
           </ul>
           <hr />
-          <h3>Target audience</h3>
-          <p className="muted">{course.audience}</p>
-          <hr />
           <p className="form-hint">
             Draft revision {document.draftRevision}
             {document.publishedVersion
@@ -150,7 +165,9 @@ export async function TeacherCourseDetail({ id }: { id: string }) {
         </aside>
       </div>
       {document.publishedVersion !== null && (
-        <section id="course-discussions" className="scroll-mt-6"><TeacherCourseDiscussion courseId={id} /></section>
+        <section id="course-discussions" className="scroll-mt-6">
+          <TeacherCourseDiscussion courseId={id} />
+        </section>
       )}
     </>
   );

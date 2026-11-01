@@ -18,7 +18,7 @@ export default async function StudentStudioPage() {
       <PageHeading
         eyebrow="PERSONAL AI STUDIO"
         title="Learn anything, your way."
-        description="Describe what you want to learn. AI builds a short course with a quiz that only you can see."
+        description="Bring your ideas to life with your own creative courses. Save them to explore in My Learning."
       />
       <CourseGenerator mode="student" history={history} />
     </>

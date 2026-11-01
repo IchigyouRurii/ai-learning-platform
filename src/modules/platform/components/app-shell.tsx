@@ -4,19 +4,18 @@ import { BrandLogo } from "@/shared/ui/brand-logo";
 import {
   ArrowLeftRight,
   FlaskConical,
-  Sparkles,
   ShieldCheck,
-  Search,
   Plus,
   ChevronDown,
 } from "lucide-react";
 import type { User } from "@/shared/contracts";
-import { getAIProvider } from "@/shared/ai/client";
 import { Navigation } from "./navigation";
 import { switchDemoRole } from "../server/actions";
 import { getAppMode } from "@/shared/config";
 import { LogoutButton } from "../auth/logout-button";
 import { WorkspaceSidebar } from "./workspace-sidebar";
+import { CatalogSearch } from "./catalog-search";
+import { ProfileMenu } from "./profile-menu";
 
 export function AppShell({
   user,
@@ -34,7 +33,7 @@ export function AppShell({
         : "Student";
   return (
     <div
-      className={`app-shell${user.role === "teacher" ? " teacher-shell" : ""}`}
+      className={`app-shell${user.role !== "admin" ? " teacher-shell" : ""}`}
     >
       <a className="skip-link" href="#main-content">
         Skip to main content
@@ -49,54 +48,12 @@ export function AppShell({
             <small>MINICOURSE</small>
           </div>
         </div>
-        {user.role !== "teacher" && (
-          <div className="workspace-label">
-            {user.role === "admin" ? "Admin workspace" : "Learning workspace"}
-          </div>
-        )}
         <Navigation role={user.role} />
-        {user.role !== "teacher" && (
-          <div className="sidebar-bottom">
-            <div className="sidebar-note">
-              {user.role === "admin" ? (
-                <ShieldCheck size={18} />
-              ) : (
-                <Sparkles size={18} />
-              )}
-              <strong>
-                {user.role === "admin"
-                  ? "Keep learning on track"
-                  : "Start with a question"}
-              </strong>
-              <p>
-                {user.role === "admin"
-                  ? "Support the people and courses behind every learning experience."
-                  : "Learn through practice and participation."}
-              </p>
-            </div>
-            <div className="sidebar-version">Education, made personal.</div>
-          </div>
-        )}
       </WorkspaceSidebar>
       <div className="main-shell">
         <header className="topbar">
-          {user.role === "teacher" ? (
-            <form className="catalog-search" action="/teacher" role="search">
-              <Search size={18} aria-hidden="true" />
-              <label className="sr-only" htmlFor="catalog-search">
-                Search courses or authors
-              </label>
-              <input
-                id="catalog-search"
-                name="q"
-                type="search"
-                placeholder="Search courses or authors"
-                maxLength={200}
-              />
-              <button type="submit" aria-label="Search courses">
-                <Search size={15} />
-              </button>
-            </form>
+          {user.role !== "admin" ? (
+            <CatalogSearch />
           ) : (
             <div className="breadcrumb">
               Workspace <span>/</span> <strong>{roleName}</strong>
@@ -112,7 +69,7 @@ export function AppShell({
                 <span>Create Course</span>
               </Link>
             )}
-            <details className="profile-menu">
+            <ProfileMenu>
               <summary aria-label="Open profile menu" title={user.name}>
                 <span className="avatar">
                   {user.name
@@ -155,7 +112,7 @@ export function AppShell({
                   <LogoutButton />
                 )}
               </div>
-            </details>
+            </ProfileMenu>
           </div>
         </header>
         <main id="main-content" className="main-content">
@@ -163,15 +120,7 @@ export function AppShell({
         </main>
         <footer className="app-footer">
           <span>OpenLearnING · Learn through participation</span>
-          <span>
-            {getAIProvider() === "mock"
-              ? "AI: mock mode"
-              : "AI: live provider selected"}{" "}
-            ·{" "}
-            {demo
-              ? "Demo identity is not authentication"
-              : "Learning records linked to your account"}
-          </span>
+          {demo && <span>Demo identity is not authentication</span>}
         </footer>
       </div>
     </div>

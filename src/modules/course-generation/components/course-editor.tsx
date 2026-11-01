@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowDown,
   ArrowUp,
@@ -12,6 +12,15 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
+import {
+  COURSE_SUBJECTS,
+  courseLevel,
+  editableCourseLevels,
+  type CourseLevel,
+} from "@/shared/contracts";
+import { CourseLevelTabs } from "@/shared/ui/course-level-tabs";
+import { subjectLabel } from "@/shared/ui/course-catalog";
+import { CourseDetailsFields } from "./course-details-fields";
 import type {
   Activity,
   ContentBlock,
@@ -21,6 +30,7 @@ import type {
   QuizQuestion,
 } from "@/shared/contracts";
 import {
+  generateCourseAction,
   publishCourseRevisionAction,
   rewriteTextAction,
   updateCourseAction,
@@ -328,14 +338,34 @@ export function CourseEditor({
   mode: "teacher" | "student";
   rewriteHistory?: GenerationRecord[];
 }) {
-  const [content, setContent] = useState<CourseDraft>(initialContent);
+  const [content, setContent] = useState<CourseDraft>(() => ({
+    ...editableCourseLevels(initialContent),
+    subject: subjectLabel(initialContent.subject, initialContent.title),
+  }));
+  const [goalsText, setGoalsText] = useState(initialContent.goals.join("\n"));
   const [revision, setRevision] = useState(initialDraftRevision);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(
+    () =>
+      initialContent.lessons.every((lesson) => !lesson.difficulty) ||
+      initialContent.subject !==
+        subjectLabel(initialContent.subject, initialContent.title),
+  );
   const [published, setPublished] = useState(publishedVersion);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  const params = useSearchParams();
+  const level = courseLevel(params.get("level"));
+  function selectLevel(next: CourseLevel) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("level", next);
+    window.history.pushState(null, "", url);
+  }
+  const visibleLessons = content.lessons
+    .map((lesson, index) => ({ lesson, index }))
+    .filter(({ lesson }) => courseLevel(lesson.difficulty) === level);
 
   function update(next: (course: CourseDraft) => CourseDraft) {
     setContent((previous) => next(previous));
@@ -371,11 +401,13 @@ export function CourseEditor({
   }
   function moveLesson(index: number, delta: number) {
     update((course) => {
-      const target = index + delta;
+      const currentPosition = visibleLessons.findIndex(
+        (item) => item.index === index,
+      );
+      const target = visibleLessons[currentPosition + delta]?.index ?? -1;
       if (target < 0 || target >= course.lessons.length) return course;
       const lessons = [...course.lessons];
-      const [lesson] = lessons.splice(index, 1);
-      lessons.splice(target, 0, lesson);
+      [lessons[index], lessons[target]] = [lessons[target], lessons[index]];
       return { ...course, lessons };
     });
   }
@@ -452,92 +484,105 @@ export function CourseEditor({
 
   const detailPath =
     mode === "teacher"
-      ? `/teacher/courses/${courseId}`
-      : `/student/courses/${courseId}`;
+      ? `/teacher/courses/${courseId}?level=${level}`
+      : `/student/courses/${courseId}?level=${level}`;
 
   return (
     <div className="course-editor">
+      <p className="form-hint">
+        Edit each difficulty independently. Save and publish all levels as one
+        course revision.
+      </p>
       <section className="panel">
         <div className="section-heading">
           <h2>Course details</h2>
           <span className="form-hint">
             Draft revision {revision}
-            {published !== null ? ` · Published v${published}` : " · Unpublished"}
+            {published !== null
+              ? ` · Published v${published}`
+              : " · Unpublished"}
           </span>
         </div>
-        <label>
-          Title
-          <input
-            maxLength={160}
-            value={content.title}
-            onChange={(event) =>
-              update((course) => ({ ...course, title: event.target.value }))
-            }
-          />
-        </label>
-        <label>
-          Description
-          <textarea
-            rows={3}
-            maxLength={2000}
-            value={content.description}
-            onChange={(event) =>
-              update((course) => ({
-                ...course,
-                description: event.target.value,
-              }))
-            }
-          />
-        </label>
-        <label>
-          Subject
-          <input
-            maxLength={100}
-            value={content.subject}
-            onChange={(event) =>
-              update((course) => ({ ...course, subject: event.target.value }))
-            }
-          />
-        </label>
-        <label>
-          Target audience
-          <input
-            maxLength={500}
-            value={content.audience}
-            onChange={(event) =>
-              update((course) => ({ ...course, audience: event.target.value }))
-            }
-          />
-        </label>
-        <label>
-          Learning goals (one per line)
-          <textarea
-            rows={4}
-            value={content.goals.join("\n")}
-            onChange={(event) =>
-              update((course) => ({
-                ...course,
-                goals: event.target.value
-                  .split("\n")
-                  .map((goal) => goal.trim())
-                  .filter(Boolean),
-              }))
-            }
-          />
-        </label>
+        <CourseDetailsFields
+          subject={content.subject}
+          topic={content.title}
+          introduction={content.description}
+          goals={goalsText}
+          disabled={pending}
+          onChange={(field, value) => {
+            if (field === "goals") setGoalsText(value);
+            update((course) => ({
+              ...course,
+              ...(field === "topic"
+                ? { title: value }
+                : field === "introduction"
+                  ? { description: value }
+                  : field === "subject"
+                    ? { subject: value }
+                    : {
+                        goals: value
+                          .split("\n")
+                          .map((goal) => goal.trim())
+                          .filter(Boolean),
+                      }),
+            }));
+          }}
+        />
       </section>
 
-      {content.lessons.map((lesson, lessonIndex) => (
+      <CourseLevelTabs
+        value={level}
+        onChange={selectLevel}
+        disabled={pending}
+      />
+      {!visibleLessons.length && (
+        <section className="panel">
+          <p>No {level} materials yet.</p>
+          <button
+            className="button secondary"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                setError("");
+                const result = await generateCourseAction({
+                  topic: content.title,
+                  description: content.description,
+                  subject: COURSE_SUBJECTS.includes(
+                    content.subject as (typeof COURSE_SUBJECTS)[number],
+                  )
+                    ? (content.subject as (typeof COURSE_SUBJECTS)[number])
+                    : "Other",
+                  audience: content.audience,
+                  goals: content.goals.join("\n"),
+                  difficulty: level,
+                  materials: "",
+                });
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                update((course) => ({
+                  ...course,
+                  lessons: [...course.lessons, ...result.data.lessons],
+                }));
+              })
+            }
+          >
+            Generate {level} materials
+          </button>
+        </section>
+      )}
+      {visibleLessons.map(({ lesson, index: lessonIndex }, position) => (
         <section className="panel lesson-editor" key={lesson.id}>
           <div className="section-heading">
-            <h2>Lesson {lessonIndex + 1}</h2>
+            <h2>Lesson {position + 1}</h2>
             <div className="editor-actions">
               <button
                 type="button"
                 className="icon-button"
                 title="Move lesson up"
                 aria-label="Move lesson up"
-                disabled={lessonIndex === 0}
+                disabled={position === 0}
                 onClick={() => moveLesson(lessonIndex, -1)}
               >
                 <ArrowUp size={16} />
@@ -547,7 +592,7 @@ export function CourseEditor({
                 className="icon-button"
                 title="Move lesson down"
                 aria-label="Move lesson down"
-                disabled={lessonIndex === content.lessons.length - 1}
+                disabled={position === visibleLessons.length - 1}
                 onClick={() => moveLesson(lessonIndex, 1)}
               >
                 <ArrowDown size={16} />
@@ -557,7 +602,7 @@ export function CourseEditor({
                 className="icon-button"
                 title="Delete lesson"
                 aria-label="Delete lesson"
-                disabled={content.lessons.length <= 1}
+                disabled={visibleLessons.length <= 1}
                 onClick={() =>
                   update((course) => ({
                     ...course,
@@ -610,7 +655,10 @@ export function CourseEditor({
                     blockId={block.id}
                     body={block.body}
                     onApply={(text) =>
-                      updateBlock(lessonIndex, blockIndex, { ...block, body: text })
+                      updateBlock(lessonIndex, blockIndex, {
+                        ...block,
+                        body: text,
+                      })
                     }
                   />
                 </>
@@ -691,8 +739,9 @@ export function CourseEditor({
               lessons: [
                 ...course.lessons,
                 {
+                  difficulty: level,
                   id: newId("lesson"),
-                  title: `Lesson ${course.lessons.length + 1}`,
+                  title: `Lesson ${visibleLessons.length + 1}`,
                   blocks: [
                     {
                       id: newId("text"),

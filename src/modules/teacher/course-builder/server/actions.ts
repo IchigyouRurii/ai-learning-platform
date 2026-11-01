@@ -35,6 +35,7 @@ export async function saveDraftAction(
     const actor = await getCurrentUser();
     const course = await createCourse(actor, courseDraftSchema.parse(input));
     revalidatePath("/teacher");
+    revalidatePath("/teacher/creations");
     return { ok: true, data: { id: course.id } };
   } catch (error) {
     return { ok: false, error: actionError(error) };
@@ -47,7 +48,9 @@ export async function publishCourseAction(
   try {
     await publishCourse(await getCurrentUser(), id);
     revalidatePath("/teacher");
+    revalidatePath("/teacher/creations");
     revalidatePath("/student");
+    revalidatePath(`/teacher/marketplace/${id}`);
     return { ok: true, data: null };
   } catch (error) {
     return { ok: false, error: actionError(error) };

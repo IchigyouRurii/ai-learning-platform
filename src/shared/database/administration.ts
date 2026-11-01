@@ -9,6 +9,7 @@ import { getDatabasePool } from "./pool";
 
 const runtime = globalThis as typeof globalThis & {
   minicourseAdministration?: AdministrationRepository;
+  minicourseAdministrationPool?: ReturnType<typeof getDatabasePool>;
 };
 export function getAdministrationRepository(): AdministrationRepository {
   if (getAppMode() !== "neon")
@@ -16,7 +17,13 @@ export function getAdministrationRepository(): AdministrationRepository {
       "DEPENDENCY_UNAVAILABLE",
       "Administrator tools require the Neon database. Local demo mode does not provide administrator access.",
     );
-  runtime.minicourseAdministration ??=
-    createAdministrationRepository(getDatabasePool());
+  const pool = getDatabasePool();
+  if (
+    !runtime.minicourseAdministration ||
+    runtime.minicourseAdministrationPool !== pool
+  ) {
+    runtime.minicourseAdministration = createAdministrationRepository(pool);
+    runtime.minicourseAdministrationPool = pool;
+  }
   return runtime.minicourseAdministration;
 }

@@ -1,6 +1,10 @@
 import type { Pool } from "pg";
 import {
   courseDraftSchema,
+  courseLevel,
+  type CourseLevel,
+  catalogCourseSchema,
+  toPublishedCourse,
   type Course,
   type CourseDocument,
   type CourseDraft,
@@ -8,6 +12,7 @@ import {
   type GenerationKind,
   type LearningPathRecord,
   type Submission,
+  type LessonCompletionRecord,
   type TeacherFeedback,
   type User,
 } from "@/shared/contracts";
@@ -76,49 +81,176 @@ const documentColumns = `id, owner_id, status, visibility, version, published_ve
 
 export function createNeonRepository(pool: Pool): PlatformRepository {
   return {
+    async listOwnedCatalog(actor) {
+      if (!actor?.id || !["teacher", "student"].includes(actor.role))
+        throw new Error("An author account is required.");
+      const result = await pool.query(
+        `select c.id, c.owner_id as "ownerId", $2::text as author,
+        coalesce(r.content,c.draft_content)->>'title' as title,
+        coalesce(r.content,c.draft_content)->>'description' as description,
+        coalesce(r.content,c.draft_content)->>'subject' as subject,
+        jsonb_array_length(coalesce(r.content,c.draft_content)->'lessons') as "lessonCount",
+        c.version, c.status, c.moderation_status as "moderationStatus"
+        from ${courseFrom} where c.owner_id=$1 order by c.created_at desc`,
+        [actor.id, actor.name],
+      );
+      return result.rows.map((row) => catalogCourseSchema.parse(row));
+    },
+    async canDeleteOwnedCourse(courseId, ownerId) {
+      const result = await pool.query(
+        `select 1 from courses c join "user" u on u.id=c.owner_id
+        where c.id=$1 and c.owner_id=$2 and u.role='student' and c.visibility='personal'
+        and not exists(select 1 from classrooms where course_id=c.id)
+        and not exists(select 1 from course_assignments where course_id=c.id)
+        and not exists(select 1 from enrollments where course_id=c.id and student_id<>$2)`,
+        [courseId, ownerId],
+      );
+      return result.rows.length > 0;
+    },
+    async listCatalog(actor) {
+      if (!actor?.id || !["teacher", "student", "admin"].includes(actor.role))
+        throw new Error("Please sign in first.");
+      const result = await pool.query(
+        `select c.id, c.owner_id as "ownerId", u.name as author,
+          r.content->>'title' as title, r.content->>'description' as description,
+          r.content->>'subject' as subject, jsonb_array_length(r.content->'lessons') as "lessonCount",
+          c.published_version as version, c.status, c.moderation_status as "moderationStatus"
+         from courses c join course_revisions r on r.course_id = c.id and r.version = c.published_version
+         join "user" u on u.id = c.owner_id
+         where c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active'
+         order by c.created_at desc`,
+      );
+      return result.rows.map((row) => catalogCourseSchema.parse(row));
+    },
+    async findPublishedCourse(actor, id) {
+      if (!actor?.id || !["teacher", "student", "admin"].includes(actor.role))
+        throw new Error("Please sign in first.");
+      const result = await pool.query<CourseRow & { author: string }>(
+        `select c.id, c.owner_id, c.status, c.visibility, c.published_version as version,
+          r.content, c.created_at, c.updated_at, c.moderation_status, c.moderation_reason, u.name as author
+         from courses c join course_revisions r on r.course_id = c.id and r.version = c.published_version
+         join "user" u on u.id = c.owner_id
+         where c.id = $1 and c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active'`,
+        [id],
+      );
+      const row = result.rows[0];
+      return row ? toPublishedCourse(courseFromRow(row), row.author) : null;
+    },
+    async getStudentCourseContext(actor, courseId) {
+      if (!actor?.id || actor.role !== "student")
+        throw new Error("Student access required.");
+      const result = await pool.query<
+        CourseRow & {
+          enrolled: boolean;
+          class_managed: boolean;
+          active_level: CourseLevel | null;
+        }
+      >(
+        `select ${courseColumns},
+          exists(select 1 from enrollments e where e.course_id=c.id and e.student_id=$2 and e.direct_access) as enrolled,
+          (select e.difficulty from enrollments e where e.course_id=c.id and e.student_id=$2 and e.direct_access) as active_level,
+          exists(select 1 from classrooms cl where cl.course_id=c.id) as class_managed
+         from ${courseFrom}
+         where c.id=$1 and c.status='published' and c.moderation_status='active'
+           and r.course_id is not null
+           and (c.visibility='cohort' or (c.visibility='personal' and c.owner_id=$2))
+           and exists(select 1 from "user" u where u.id=$2 and u.role='student')`,
+        [courseId, actor.id],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      const course = courseFromRow(row);
+      // A prospective learner needs an outline, not unrelated private history.
+      if (!row.enrolled)
+        return {
+          course,
+          enrolled: false,
+          activeLevel: null,
+          classManaged: row.class_managed,
+          submissions: [],
+          lessonCompletions: [],
+        };
+      const access = `exists(select 1 from enrollments e join courses c on c.id=e.course_id
+        where e.course_id=$1 and e.student_id=$2 and e.direct_access
+        and c.status='published' and c.moderation_status='active'
+        and (c.visibility='cohort' or (c.visibility='personal' and c.owner_id=$2)))`;
+      const [submissions, completions] = await Promise.all([
+        pool.query<Submission>(
+          `select s.id,s.course_id as "courseId",s.course_version as "courseVersion",s.activity_id as "activityId",s.student_id as "studentId",s.answer,s.ai_feedback as "aiFeedback",s.score,s.max_score as "maxScore",s.created_at as "createdAt", s.difficulty
+          from submissions s where s.course_id=$1 and s.student_id=$2 and s.course_version=$3 and s.difficulty=$4 and ${access} order by s.created_at`,
+          [courseId, actor.id, course.version, courseLevel(row.active_level)],
+        ),
+        pool.query<LessonCompletionRecord>(
+          `select lc.course_id as "courseId",lc.course_version as "courseVersion",lc.lesson_id as "lessonId",lc.student_id as "studentId",lc.completed_at as "completedAt", lc.difficulty
+          from lesson_completions lc where lc.course_id=$1 and lc.student_id=$2 and lc.course_version=$3 and lc.difficulty=$4 and ${access}`,
+          [courseId, actor.id, course.version, courseLevel(row.active_level)],
+        ),
+      ]);
+      return {
+        course,
+        enrolled: true,
+        activeLevel: courseLevel(row.active_level),
+        classManaged: row.class_managed,
+        submissions: submissions.rows.map((item) => ({
+          ...item,
+          createdAt: timestamp(item.createdAt),
+        })),
+        lessonCompletions: completions.rows.map((item) => ({
+          ...item,
+          completedAt: timestamp(item.completedAt),
+        })),
+      };
+    },
     async getWorkspace(actor) {
       const teacher = actor.role === "teacher";
-      const courses = await pool.query<CourseRow>(
-        teacher
-          ? `select ${courseColumns} from ${courseFrom} where c.owner_id = $1 order by c.created_at desc`
-          : `select ${courseColumns} from ${courseFrom} where (c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active') or (c.owner_id = $1 and c.visibility = 'personal') order by c.created_at desc`,
-        [actor.id],
-      );
-      const [enrollments, submissions, feedback, members, lessonCompletions] =
-        await Promise.all([
-          pool.query<Enrollment>(
-            `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt" from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1 and
-          e.direct_access`,
-            [actor.id],
-          ),
-          pool.query<Submission>(
-            `select s.id, s.course_id as "courseId", s.course_version as "courseVersion", s.activity_id as "activityId", s.student_id as "studentId", s.answer, s.ai_feedback as "aiFeedback", s.score, s.max_score as "maxScore", s.created_at as "createdAt" from submissions s join courses c on c.id = s.course_id where ${teacher ? "c.owner_id" : "s.student_id"} = $1 order by s.created_at`,
-            [actor.id],
-          ),
-          pool.query<TeacherFeedback>(
-            `select f.id, f.course_id as "courseId", f.student_id as "studentId", f.teacher_id as "teacherId", f.message, f.created_at as "createdAt" from teacher_feedback f join courses c on c.id = f.course_id where ${teacher ? "c.owner_id" : "f.student_id"} = $1 order by f.created_at`,
-            [actor.id],
-          ),
+      // These reads are independent and retain the same actor-scoped SQL.
+      const [
+        courses,
+        enrollments,
+        submissions,
+        feedback,
+        members,
+        lessonCompletions,
+      ] = await Promise.all([
+        pool.query<CourseRow>(
           teacher
-            ? pool.query<User>(
-                `select distinct u.id, u.name, u.role from "user" u join enrollments e on e.student_id = u.id join courses c on c.id = e.course_id where c.owner_id = $1`,
-                [actor.id],
-              )
-            : Promise.resolve({ rows: [actor] }),
-          pool.query<{
-            courseId: string;
-            courseVersion: number;
-            lessonId: string;
-            studentId: string;
-            completedAt: Date | string;
-          }>(
-            `select lc.course_id as "courseId", lc.course_version as "courseVersion", lc.lesson_id as "lessonId", lc.student_id as "studentId", lc.completed_at as "completedAt"
+            ? `select ${courseColumns} from ${courseFrom} where c.owner_id = $1 order by c.created_at desc`
+            : `select ${courseColumns} from ${courseFrom} where (c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active') or (c.owner_id = $1 and c.visibility = 'personal') order by c.created_at desc`,
+          [actor.id],
+        ),
+        pool.query<Enrollment>(
+          `select e.course_id as "courseId", e.student_id as "studentId", e.joined_at as "joinedAt", e.difficulty from enrollments e join courses c on c.id = e.course_id where ${teacher ? "c.owner_id" : "e.student_id"} = $1 and
+          e.direct_access`,
+          [actor.id],
+        ),
+        pool.query<Submission>(
+          `select s.id, s.course_id as "courseId", s.course_version as "courseVersion", s.activity_id as "activityId", s.student_id as "studentId", s.answer, s.ai_feedback as "aiFeedback", s.score, s.max_score as "maxScore", s.created_at as "createdAt", s.difficulty from submissions s join courses c on c.id = s.course_id where ${teacher ? "c.owner_id" : "s.student_id"} = $1 order by s.created_at`,
+          [actor.id],
+        ),
+        pool.query<TeacherFeedback>(
+          `select f.id, f.course_id as "courseId", f.student_id as "studentId", f.teacher_id as "teacherId", f.message, f.created_at as "createdAt" from teacher_feedback f join courses c on c.id = f.course_id where ${teacher ? "c.owner_id" : "f.student_id"} = $1 order by f.created_at`,
+          [actor.id],
+        ),
+        teacher
+          ? pool.query<User>(
+              `select distinct u.id, u.name, u.role from "user" u join enrollments e on e.student_id = u.id join courses c on c.id = e.course_id where c.owner_id = $1`,
+              [actor.id],
+            )
+          : Promise.resolve({ rows: [actor] }),
+        pool.query<{
+          courseId: string;
+          courseVersion: number;
+          lessonId: string;
+          studentId: string;
+          completedAt: Date | string;
+        }>(
+          `select lc.course_id as "courseId", lc.course_version as "courseVersion", lc.lesson_id as "lessonId", lc.student_id as "studentId", lc.completed_at as "completedAt", lc.difficulty
            from lesson_completions lc join courses c on c.id = lc.course_id
            where ${teacher ? "c.owner_id" : "lc.student_id"} = $1
            order by lc.completed_at`,
-            [actor.id],
-          ),
-        ]);
+          [actor.id],
+        ),
+      ]);
       return {
         schemaVersion: 1 as const,
         courses: courses.rows.map(courseFromRow),
@@ -155,6 +287,37 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       );
       return result.rows[0] ? documentFromRow(result.rows[0]) : null;
     },
+    async getActiveCourseLevel(courseId, studentId) {
+      const result = await pool.query<{ difficulty: CourseLevel }>(
+        `select e.difficulty from enrollments e join courses c on c.id=e.course_id join "user" u on u.id=e.student_id
+        where e.course_id=$1 and e.student_id=$2 and e.direct_access and u.role='student' and c.status='published' and c.moderation_status='active'
+        and (c.visibility='cohort' or (c.visibility='personal' and c.owner_id=$2))`,
+        [courseId, studentId],
+      );
+      return result.rows[0]?.difficulty ?? null;
+    },
+    async switchCourseLevel(
+      courseId,
+      studentId,
+      expectedLevel,
+      nextLevel,
+      courseVersion,
+    ) {
+      const result = await pool.query(
+        `update enrollments e set difficulty=$4 from courses c,course_revisions r,"user" u
+        where e.course_id=$1 and e.student_id=$2 and e.difficulty=$3 and e.direct_access
+        and c.id=e.course_id and c.status='published' and c.moderation_status='active' and c.published_version=$5
+        and (c.visibility='cohort' or (c.visibility='personal' and c.owner_id=$2))
+        and r.course_id=c.id and r.version=$5 and u.id=$2 and u.role='student'
+        and (not exists(select 1 from jsonb_array_elements(r.content->'lessons') l where l ? 'difficulty')
+          or exists(select 1 from jsonb_array_elements(r.content->'lessons') l where coalesce(l->>'difficulty','beginner')=$4)) returning e.course_id`,
+        [courseId, studentId, expectedLevel, nextLevel, courseVersion],
+      );
+      if (!result.rowCount)
+        throw new Error(
+          "The course or active difficulty has changed. Refresh and try again.",
+        );
+    },
     async isEnrolled(courseId, studentId) {
       const result = await pool.query(
         `select 1 from enrollments e join courses c on c.id = e.course_id
@@ -164,6 +327,65 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         [courseId, studentId],
       );
       return Boolean(result.rowCount);
+    },
+    async deleteOwnedCourse(courseId, ownerId) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const owned = await client.query(
+          `select c.id from courses c join "user" u on u.id=c.owner_id
+          where c.id=$1 and c.owner_id=$2 and u.role='student' and c.visibility='personal' for update of c`,
+          [courseId, ownerId],
+        );
+        if (!owned.rows.length)
+          throw new Error("You can only delete courses you created.");
+        const used = await client.query(
+          `select 1 where
+          exists(select 1 from classrooms where course_id=$1) or
+          exists(select 1 from course_assignments where course_id=$1) or
+          exists(select 1 from enrollments where course_id=$1 and student_id<>$2)`,
+          [courseId, ownerId],
+        );
+        if (used.rows.length)
+          throw new Error(
+            "This course is linked to a class or another learner. It cannot be deleted because their learning records must be preserved.",
+          );
+        await client.query("delete from teacher_feedback where course_id=$1", [
+          courseId,
+        ]);
+        await client.query("delete from submissions where course_id=$1", [
+          courseId,
+        ]);
+        // Course revisions, author's enrollment, completions, annotations and discussions cascade.
+        const removed = await client.query(
+          "delete from courses where id=$1 and owner_id=$2 returning id",
+          [courseId, ownerId],
+        );
+        if (!removed.rows.length)
+          throw new Error("The course could not be deleted.");
+        await client.query("commit");
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async leaveCourse(courseId, studentId) {
+      const result = await pool.query(
+        `update enrollments e set direct_access = false
+         from courses c, "user" u
+         where e.course_id=$1 and e.student_id=$2 and c.id=e.course_id
+           and u.id=$2 and u.role='student'
+           and c.visibility='cohort' and c.owner_id <> $2
+           and not exists (select 1 from classrooms cl where cl.course_id=c.id)
+         returning e.course_id`,
+        [courseId, studentId],
+      );
+      if (!result.rows.length)
+        throw new Error(
+          "Unable to leave this course. Class courses cannot be left.",
+        );
     },
     async isCourseManagedByClass(courseId) {
       const result = await pool.query(
@@ -314,11 +536,13 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         client.release();
       }
     },
-    async enroll(courseId, studentId) {
+    async enroll(courseId, studentId, difficulty = "beginner") {
       const result = await pool.query(
-        `with available as (select id from courses where id = $1 and status = 'published' and moderation_status = 'active' and (visibility = 'cohort' or (visibility = 'personal' and owner_id = $2)) for share)
-         insert into enrollments (course_id, student_id) select id, $2 from available on conflict (course_id, student_id) do update set direct_access = true returning course_id`,
-        [courseId, studentId],
+        `with available as (select c.id from courses c join course_revisions r on r.course_id=c.id and r.version=c.published_version join "user" u on u.id=$2 and u.role='student'
+         where c.id = $1 and c.status = 'published' and c.moderation_status = 'active' and (c.visibility = 'cohort' or (c.visibility = 'personal' and c.owner_id = $2))
+         and (not exists(select 1 from jsonb_array_elements(r.content->'lessons') l where l ? 'difficulty') or exists(select 1 from jsonb_array_elements(r.content->'lessons') l where coalesce(l->>'difficulty','beginner')=$3)) for share of c,u)
+         insert into enrollments (course_id, student_id, difficulty) select id, $2, $3 from available on conflict (course_id, student_id) do update set direct_access = true, difficulty=excluded.difficulty where not enrollments.direct_access or enrollments.difficulty=excluded.difficulty returning course_id`,
+        [courseId, studentId, difficulty],
       );
       if (!result.rowCount)
         throw new Error("This course is not open for enrollment.");
@@ -327,12 +551,12 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       const result = await pool.query(
         `with available as (select id, published_version from courses where id = $2 and status = 'published' and moderation_status = 'active' for share),
         student as (select id from "user" where id = $5 and role = 'student' for share),
-        direct_grant as (select e.student_id from enrollments e join available c on c.id = e.course_id where e.student_id = $5 and e.direct_access and c.published_version = $3 for share of e)
-        insert into submissions (id, course_id, course_version, activity_id, student_id, answer, ai_feedback, score, max_score, created_at)
-        select $1, c.id, r.version, $4, s.id, $6, $7, $8, $9, $10 from available c
+        direct_grant as (select e.student_id from enrollments e join available c on c.id = e.course_id where e.student_id = $5 and e.direct_access and e.difficulty=$11 and c.published_version = $3 for share of e)
+        insert into submissions (id, course_id, course_version, activity_id, student_id, answer, ai_feedback, score, max_score, created_at, difficulty)
+        select $1, c.id, r.version, $4, s.id, $6, $7, $8, $9, $10, $11 from available c
         join course_revisions r on r.course_id = c.id and r.version = $3 cross join student s
         where exists(select 1 from direct_grant)
-        and exists (select 1 from jsonb_array_elements(r.content->'lessons') l cross join lateral jsonb_array_elements(l->'blocks') b where b->>'type' = 'activity' and b->'activity'->>'id' = $4) returning id`,
+        and exists (select 1 from jsonb_array_elements(r.content->'lessons') l cross join lateral jsonb_array_elements(l->'blocks') b where b->>'type' = 'activity' and b->'activity'->>'id' = $4 and (not exists(select 1 from jsonb_array_elements(r.content->'lessons') any_l where any_l ? 'difficulty') or coalesce(l->>'difficulty','beginner')=$11)) returning id`,
         [
           item.id,
           item.courseId,
@@ -344,6 +568,7 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
           item.score ?? null,
           item.maxScore ?? null,
           item.createdAt,
+          courseLevel(item.difficulty),
         ],
       );
       if (!result.rowCount)
@@ -352,45 +577,46 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         );
       return item;
     },
-    async completeLesson(courseId, courseVersion, lessonId, studentId, completed = true) {
+    async completeLesson(
+      courseId,
+      courseVersion,
+      lessonId,
+      studentId,
+      completed = true,
+      difficulty = "beginner",
+    ) {
       if (!completed) {
         await pool.query(
           `delete from lesson_completions lc
            using courses c, enrollments e
            where lc.course_id = c.id and e.course_id = c.id
-             and e.student_id = $4 and e.direct_access
+             and e.student_id = $4 and e.direct_access and e.difficulty=$5
              and c.status = 'published' and c.moderation_status = 'active'
              and lc.course_id = $1 and lc.course_version = $2
-             and lc.lesson_id = $3 and lc.student_id = $4`,
-          [courseId, courseVersion, lessonId, studentId],
+             and lc.lesson_id = $3 and lc.student_id = $4 and lc.difficulty=$5`,
+          [courseId, courseVersion, lessonId, studentId, difficulty],
         );
         return;
       }
       const result = await pool.query(
-        `insert into lesson_completions (student_id, course_id, course_version, lesson_id)
-         select $4, c.id, r.version, $3
+        `insert into lesson_completions (student_id, course_id, course_version, lesson_id, difficulty)
+         select $4, c.id, r.version, $3, $5
          from courses c
          join course_revisions r on r.course_id = c.id and r.version = $2
-         join enrollments e on e.course_id = c.id and e.student_id = $4 and e.direct_access
-         where c.id = $1 and c.status = 'published' and c.moderation_status = 'active'
+         join enrollments e on e.course_id = c.id and e.student_id = $4 and e.direct_access and e.difficulty=$5
+         where c.id = $1 and c.status = 'published' and c.moderation_status = 'active' and c.published_version=$2
            and exists (
              select 1 from jsonb_array_elements(r.content->'lessons') lesson
-             where lesson->>'id' = $3
+             where lesson->>'id' = $3 and (not exists(select 1 from jsonb_array_elements(r.content->'lessons') any_l where any_l ? 'difficulty') or coalesce(lesson->>'difficulty','beginner')=$5)
            )
-         on conflict (student_id, course_id, course_version, lesson_id) do nothing
+         on conflict (student_id, course_id, course_version, lesson_id, difficulty) do update set completed_at=lesson_completions.completed_at
          returning lesson_id`,
-        [courseId, courseVersion, lessonId, studentId],
+        [courseId, courseVersion, lessonId, studentId, difficulty],
       );
-      if (!result.rowCount) {
-        const existing = await pool.query(
-          "select 1 from lesson_completions where student_id = $1 and course_id = $2 and course_version = $3 and lesson_id = $4",
-          [studentId, courseId, courseVersion, lessonId],
+      if (!result.rowCount)
+        throw new Error(
+          "The course, lesson, or enrollment has changed. Refresh and try again.",
         );
-        if (!existing.rowCount)
-          throw new Error(
-            "The course, lesson, or enrollment has changed. Refresh and try again.",
-          );
-      }
     },
     async insertFeedback(item) {
       const result = await pool.query(
@@ -461,8 +687,27 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       const client = await pool.connect();
       try {
         await client.query("begin");
-        await client.query(
-          "insert into learning_paths (id, owner_id, title, steps, created_at) values ($1, $2, $3, $4::jsonb, $5)",
+        const saved = await client.query(
+          `insert into learning_paths (id, owner_id, title, steps, created_at)
+           select $1, $2, $3, $4::jsonb, $5
+           where exists (select 1 from "user" where id = $2 and role = 'student')
+             and not exists (
+               select 1 from jsonb_array_elements($4::jsonb) step
+               where not exists (
+                 select 1 from courses c join course_revisions r on r.course_id = c.id and r.version = c.published_version
+                 where c.id = step->>'courseId' and c.published_version = (step->>'courseVersion')::int
+                   and c.status = 'published' and c.visibility = 'cohort' and c.moderation_status = 'active'
+                   and coalesce(step->>'difficulty', 'beginner') in ('beginner', 'advanced', 'expert')
+                   and jsonb_array_length(r.content->'lessons') > 0
+                   and (
+                     not exists (select 1 from jsonb_array_elements(r.content->'lessons') lesson where lesson ? 'difficulty')
+                     or exists (select 1 from jsonb_array_elements(r.content->'lessons') lesson where lesson->>'difficulty' = coalesce(step->>'difficulty', 'beginner'))
+                   )
+               )
+             )
+           on conflict (id) do update set title = excluded.title, steps = excluded.steps
+           where learning_paths.owner_id = excluded.owner_id
+           returning id`,
           [
             path.id,
             path.ownerId,
@@ -471,6 +716,10 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
             path.createdAt,
           ],
         );
+        if (!saved.rows.length)
+          throw new Error(
+            "The path or one of its courses is no longer available.",
+          );
         await client.query(
           `insert into learning_profiles (user_id, learning_path, updated_at) values ($1, $2::jsonb, now()) on conflict (user_id) do update set learning_path = excluded.learning_path, updated_at = now()`,
           [path.ownerId, JSON.stringify(path)],

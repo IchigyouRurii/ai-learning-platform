@@ -107,7 +107,7 @@ export function CreateClassForm({
         ) : (
           <p className="error-text" role="alert">
             Publish a cohort course before creating a class.{" "}
-            <Link href="/teacher/creations">Go to My Creations</Link>
+            <Link href="/teacher/creations">Go to My Creation</Link>
           </p>
         )}
       </div>
