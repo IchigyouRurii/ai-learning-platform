@@ -27,6 +27,54 @@ function response(content: string, finishReason = "stop") {
   });
 }
 
+function validCourse() {
+  const base = createSeedState().courses[0];
+  const lessons = [1, 2, 3].map((lessonNumber) => {
+    const questions = Array.from({ length: 5 }, (_, index) => {
+      const id = `q-${lessonNumber}-${index}`;
+      const options = ["A", "B", "C", "D"].map((label) => ({
+        id: `${id}-${label.toLowerCase()}`,
+        text: `Option ${label}`,
+      }));
+      return {
+        id,
+        prompt: `Question ${index + 1}`,
+        multiple: false,
+        options,
+        correctOptionIds: [options[0].id],
+        explanation: "Option A is correct.",
+      };
+    });
+    return {
+      id: `lesson-${lessonNumber}`,
+      title: `Lesson ${lessonNumber}`,
+      blocks: [
+        {
+          id: `text-${lessonNumber}`,
+          type: "text" as const,
+          body: Array.from(
+            { length: 10 },
+            (_, page) => `## Page ${page + 1}\n\n- Short point.`,
+          ).join("\n\n---\n\n"),
+        },
+        {
+          id: `quiz-block-${lessonNumber}`,
+          type: "activity" as const,
+          activity: {
+            id: `quiz-${lessonNumber}`,
+            type: "quiz" as const,
+            title: "Check your understanding",
+            prompt: "Answer all five questions.",
+            rubric: "One point per correct answer.",
+            questions,
+          },
+        },
+      ],
+    };
+  });
+  return { ...base, title: "Requirements course", lessons };
+}
+
 describe("OpenRouter transport and course integration", () => {
   it("sends a single authenticated request without unsupported JSON parameters in prompt mode", async () => {
     fetchMock.mockResolvedValue(response("学习提示"));
@@ -98,9 +146,11 @@ describe("OpenRouter transport and course integration", () => {
     await expect(complete(messages)).rejects.toThrow("usable text");
   });
   it("accepts a complete fenced JSON course but still validates the course schema", async () => {
-    const course = createSeedState().courses[0];
-    fetchMock.mockResolvedValue(
-      response("```json\n" + JSON.stringify(course) + "\n```"),
+    const course = validCourse();
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        response("```json\n" + JSON.stringify(course) + "\n```"),
+      ),
     );
     const result = await generateCourse({
       topic: "需求描述",

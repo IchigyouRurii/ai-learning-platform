@@ -13,6 +13,7 @@ import {
   type CourseDraft,
   type Course,
   type CourseDocument,
+  type CourseMaterial,
   type GenerationKind,
   type LearningPathRecord,
   type User,
@@ -386,6 +387,57 @@ export async function recordGeneration(
     result: input.result,
     createdAt: new Date().toISOString(),
   });
+}
+
+export async function createMaterial(
+  actor: User,
+  input: {
+    filename: string;
+    mimeType: string;
+    sizeBytes: number;
+    content: Uint8Array;
+    extractedText: string;
+  },
+) {
+  if (actor.role !== "teacher" && actor.role !== "student")
+    throw new Error("This account cannot upload course materials.");
+  const material: CourseMaterial = {
+    id: randomUUID(),
+    ownerId: actor.id,
+    filename: input.filename,
+    mimeType: input.mimeType,
+    sizeBytes: input.sizeBytes,
+    extractedText: input.extractedText,
+    createdAt: new Date().toISOString(),
+  };
+  return getRepository().insertMaterial(material, input.content);
+}
+
+export async function getMaterialForDownload(actor: User, id: string) {
+  if (
+    actor.role !== "teacher" &&
+    actor.role !== "student" &&
+    actor.role !== "admin"
+  )
+    throw new Error("This account cannot download materials.");
+  const found = await getRepository().findMaterial(id);
+  if (!found) throw new Error("Material not found.");
+  if (
+    found.material.ownerId !== actor.id &&
+    actor.role !== "admin" &&
+    !(await getRepository().isMaterialPublished(id))
+  )
+    throw new Error("You do not have permission to download this material.");
+  return found;
+}
+
+export async function getMaterialsForGeneration(
+  actor: User,
+  ids: string[],
+) {
+  if (actor.role !== "teacher" && actor.role !== "student")
+    throw new Error("This account cannot use course materials.");
+  return getRepository().findMaterialsForOwner(actor.id, [...new Set(ids)]);
 }
 
 export async function saveLearningPath(

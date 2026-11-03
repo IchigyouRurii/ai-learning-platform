@@ -12,8 +12,9 @@ import { PATH_SYSTEM_PROMPT, pathUserMessage } from "../prompts/path";
 export const pathProfileSchema = z.object({
   background: z.string().trim().min(2).max(2000),
   goals: z.string().trim().min(2).max(2000),
-  difficulty: courseLevelSchema,
+  difficulty: courseLevelSchema.default("beginner"),
   availableMinutesPerWeek: z.number().int().min(15).max(10080),
+  courseIds: z.array(z.string().min(1).max(200)).min(1).optional(),
 });
 export type PathProfile = z.infer<typeof pathProfileSchema>;
 
@@ -46,7 +47,7 @@ const rawPathSchema = z.object({
         reason: z.string().trim().min(1).max(1000),
       }),
     )
-    .min(2),
+    .min(1),
 });
 
 export function catalogItem(course: Course): PathCatalogItem {
@@ -70,13 +71,13 @@ export async function generateLearningPath(
   catalog: PathCatalogItem[],
 ): Promise<GeneratedPath> {
   const profile = pathProfileSchema.parse(rawProfile);
-  if (catalog.length < 2)
+  if (catalog.length < 1)
     throw new Error(
-      "At least two Marketplace courses are needed to generate a learning path. Please try again when more courses are published.",
+      "Select at least one Marketplace course before generating a learning path.",
     );
 
   if (getAIProvider() === "mock") {
-    const steps = catalog.slice(0, 3).map((course, index) => ({
+    const steps = catalog.map((course, index) => ({
       courseId: course.id,
       courseVersion: course.version,
       difficulty: course.levels?.includes(profile.difficulty)
@@ -95,13 +96,29 @@ export async function generateLearningPath(
   const text = await complete(
     [
       { role: "system", content: PATH_SYSTEM_PROMPT },
-      { role: "user", content: pathUserMessage({ profile, catalog }) },
+      {
+        role: "user",
+        content: pathUserMessage({
+          profile: {
+            background: profile.background,
+            goals: profile.goals,
+            availableMinutesPerWeek: profile.availableMinutesPerWeek,
+            courseIds: profile.courseIds,
+          },
+          catalog,
+        }),
+      },
     ],
     true,
     { maxTokens: 2500, temperature: 0.3 },
   );
   const parsed = parsePath(text);
-  return validateAgainstCatalog(parsed, catalog, profile.difficulty);
+  return validateAgainstCatalog(
+    parsed,
+    catalog,
+    profile.difficulty,
+    profile.courseIds,
+  );
 }
 
 function parsePath(raw: string): z.infer<typeof rawPathSchema> {
@@ -130,6 +147,7 @@ export function validateAgainstCatalog(
   raw: z.infer<typeof rawPathSchema>,
   catalog: PathCatalogItem[],
   preferred: import("@/shared/contracts").CourseLevel = "beginner",
+  requiredCourseIds?: string[],
 ): GeneratedPath {
   const byId = new Map(catalog.map((course) => [course.id, course]));
   const seen = new Set<string>();
@@ -161,9 +179,20 @@ export function validateAgainstCatalog(
         reason: step.reason,
       };
     });
-  if (steps.length < 2)
+  if (steps.length < 1)
     throw new Error(
-      "A generated learning path must contain at least two courses. Please regenerate.",
+      "A generated learning path must contain at least one course. Please regenerate.",
     );
+  if (requiredCourseIds?.length) {
+    const wanted = new Set(requiredCourseIds);
+    const got = new Set(steps.map((step) => step.courseId));
+    if (
+      wanted.size !== got.size ||
+      [...wanted].some((courseId) => !got.has(courseId))
+    )
+      throw new Error(
+        "The generated plan did not use exactly the selected courses. Please regenerate.",
+      );
+  }
   return { title: raw.title, steps };
 }

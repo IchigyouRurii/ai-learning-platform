@@ -395,7 +395,15 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
       return Boolean(result.rowCount);
     },
     async insertCourse(course) {
-      const { title, description, subject, audience, goals, lessons } = course;
+      const {
+        title,
+        description,
+        subject,
+        audience,
+        goals,
+        lessons,
+        attachments,
+      } = course;
       const content = {
         title,
         description,
@@ -403,6 +411,7 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         audience,
         goals,
         lessons,
+        attachments,
       };
       const client = await pool.connect();
       try {
@@ -788,6 +797,86 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         result: row.result,
         createdAt: timestamp(row.created_at),
       }));
+    },
+    async insertMaterial(material, content) {
+      await pool.query(
+        `insert into course_materials (id, owner_id, filename, mime_type, size_bytes, content, extracted_text, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          material.id,
+          material.ownerId,
+          material.filename,
+          material.mimeType,
+          material.sizeBytes,
+          Buffer.from(content),
+          material.extractedText,
+          material.createdAt,
+        ],
+      );
+      return material;
+    },
+    async findMaterial(id) {
+      const result = await pool.query<{
+        id: string;
+        owner_id: string;
+        filename: string;
+        mime_type: string;
+        size_bytes: number;
+        extracted_text: string;
+        created_at: Date | string;
+        content: Buffer;
+      }>(
+        `select id, owner_id, filename, mime_type, size_bytes, extracted_text, created_at, content from course_materials where id = $1`,
+        [id],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        material: {
+          id: row.id,
+          ownerId: row.owner_id,
+          filename: row.filename,
+          mimeType: row.mime_type,
+          sizeBytes: row.size_bytes,
+          extractedText: row.extracted_text,
+          createdAt: timestamp(row.created_at),
+        },
+        content: new Uint8Array(row.content),
+      };
+    },
+    async findMaterialsForOwner(ownerId, ids) {
+      if (!ids.length) return [];
+      const result = await pool.query<{
+        id: string;
+        owner_id: string;
+        filename: string;
+        mime_type: string;
+        size_bytes: number;
+        extracted_text: string;
+        created_at: Date | string;
+      }>(
+        `select id, owner_id, filename, mime_type, size_bytes, extracted_text, created_at from course_materials where owner_id = $1 and id = any($2::text[]) order by created_at desc`,
+        [ownerId, ids],
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        ownerId: row.owner_id,
+        filename: row.filename,
+        mimeType: row.mime_type,
+        sizeBytes: row.size_bytes,
+        extractedText: row.extracted_text,
+        createdAt: timestamp(row.created_at),
+      }));
+    },
+    async isMaterialPublished(materialId) {
+      const result = await pool.query(
+        `select 1 from courses c
+         left join course_revisions r on r.course_id = c.id and r.version = c.published_version
+         where c.status = 'published' and c.moderation_status = 'active'
+           and coalesce(r.content, c.draft_content)->'attachments' @> $1::jsonb
+         limit 1`,
+        [JSON.stringify([{ materialId }])],
+      );
+      return Boolean(result.rowCount);
     },
   };
 }

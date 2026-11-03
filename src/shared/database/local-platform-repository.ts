@@ -8,6 +8,7 @@ import {
   type Course,
   type CourseDocument,
   type CourseDraft,
+  type CourseMaterial,
   type GenerationKind,
   type GenerationRecord,
   type LearningPathRecord,
@@ -21,6 +22,7 @@ function draftOf(course: Course): CourseDraft {
     audience: course.audience,
     goals: course.goals,
     lessons: course.lessons,
+    attachments: course.attachments,
   };
 }
 
@@ -610,6 +612,43 @@ export function createLocalPlatformRepository(
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, options.limit ?? 20);
+    },
+    async insertMaterial(material: CourseMaterial, content: Uint8Array) {
+      return store.mutate((state) => {
+        state.materials ??= [];
+        state.materials.unshift({
+          material,
+          contentBase64: Buffer.from(content).toString("base64"),
+        });
+        return material;
+      });
+    },
+    async findMaterial(id) {
+      const entry = (await store.read()).materials?.find(
+        (item) => item.material.id === id,
+      );
+      if (!entry) return null;
+      return {
+        material: entry.material,
+        content: new Uint8Array(Buffer.from(entry.contentBase64, "base64")),
+      };
+    },
+    async findMaterialsForOwner(ownerId, ids) {
+      const wanted = new Set(ids);
+      return ((await store.read()).materials ?? [])
+        .filter(
+          (item) =>
+            item.material.ownerId === ownerId && wanted.has(item.material.id),
+        )
+        .map((item) => item.material);
+    },
+    async isMaterialPublished(materialId) {
+      return (await store.read()).courses.some((course) => {
+        if (course.status !== "published") return false;
+        return publishedView(course).attachments?.some(
+          (attachment) => attachment.materialId === materialId,
+        );
+      });
     },
   };
 }

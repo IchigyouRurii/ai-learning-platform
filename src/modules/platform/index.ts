@@ -35,6 +35,9 @@ export {
   saveLearningPath,
   listGenerationRecords,
   recordGeneration,
+  createMaterial,
+  getMaterialForDownload,
+  getMaterialsForGeneration,
 } from "./server/services";
 
 export {

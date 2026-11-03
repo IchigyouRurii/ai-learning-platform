@@ -68,7 +68,7 @@ export type LearningPathRecord = {
   createdAt: string;
   updatedAt: string;
 };
-export type GenerationKind = "course" | "rewrite" | "path";
+export type GenerationKind = "course" | "rewrite" | "path" | "lesson";
 /** One persisted AI interaction: generation, rewrite or path plan. */
 export type GenerationRecord = {
   id: string;
@@ -79,6 +79,20 @@ export type GenerationRecord = {
   result: unknown;
   createdAt: string;
 };
+export type CourseMaterial = {
+  id: string;
+  ownerId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  extractedText: string;
+  createdAt: string;
+};
+/** Local demo storage only; the Neon adapter keeps bytes in bytea. */
+export type DemoMaterial = {
+  material: CourseMaterial;
+  contentBase64: string;
+};
 export type DemoState = {
   schemaVersion: 1;
   courses: Course[];
@@ -88,6 +102,7 @@ export type DemoState = {
   lessonCompletions?: LessonCompletionRecord[];
   learningPaths?: LearningPathRecord[];
   generationRecords?: GenerationRecord[];
+  materials?: DemoMaterial[];
 };
 export type Workspace = DemoState & { members: User[] };
 export type ActionResult<T> =

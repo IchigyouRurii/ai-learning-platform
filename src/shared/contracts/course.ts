@@ -135,6 +135,13 @@ export function validateCourseIntroduction(
 export const COURSE_LEVELS = ["beginner", "advanced", "expert"] as const;
 export const courseLevelSchema = z.enum(COURSE_LEVELS);
 export type CourseLevel = z.infer<typeof courseLevelSchema>;
+export const courseAttachmentSchema = z.object({
+  materialId: z.string().min(1).max(200),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(120),
+  sizeBytes: z.number().int().positive().max(20_000_000),
+});
+export type CourseAttachment = z.infer<typeof courseAttachmentSchema>;
 export const COURSE_SUBJECTS = [
   "Computer Science",
   "Mathematics",
@@ -166,6 +173,7 @@ export const courseDraftSchema = z
     audience: z.string().min(1).max(500),
     goals: z.array(z.string().min(1).max(500)).min(1).max(8),
     lessons: z.array(lessonSchema).min(1).max(36),
+    attachments: z.array(courseAttachmentSchema).max(10).optional(),
   })
   .superRefine((course, context) => {
     for (const level of COURSE_LEVELS) {
@@ -232,6 +240,7 @@ export const generationInputSchema = z.object({
     .enum(["beginner", "intermediate", "advanced", "expert"])
     .default("beginner"),
   materials: z.string().trim().max(20000).default(""),
+  materialIds: z.array(z.string().min(1).max(200)).max(10).default([]),
 });
 
 export type QuizOption = z.infer<typeof quizOptionSchema>;

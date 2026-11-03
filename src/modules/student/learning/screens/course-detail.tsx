@@ -16,6 +16,7 @@ import {
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { toSafeActivity } from "@/shared/contracts";
 import { Badge, PageHeading, ProgressBar } from "@/shared/ui/primitives";
+import { LessonPages } from "@/shared/ui/lesson-pages";
 import { StudentCourseDiscussion } from "@/modules/student/discussions/screens/course-discussion";
 import { BlockComment } from "@/modules/student/annotations/components/block-comment";
 import type { AnnotationContext } from "@/modules/student/annotations/components/my-annotations";
@@ -208,7 +209,7 @@ export async function StudentCourseDetail({
                       className="grid gap-2"
                     >
                       {block.type === "text" ? (
-                        <p className="prose-text">{block.body}</p>
+                        <LessonPages body={block.body} />
                       ) : block.type === "activity" &&
                         block.activity.type === "reflection" ? (
                         <ActivityForm
@@ -258,6 +259,27 @@ export async function StudentCourseDetail({
               <li key={index}>{goal}</li>
             ))}
           </ul>
+          {course.attachments?.length ? (
+            <>
+              <hr />
+              <h3>Course materials</h3>
+              <ul className="attachment-list">
+                {course.attachments.map((attachment) => (
+                  <li key={attachment.materialId}>
+                    <a
+                      href={`/api/materials/${attachment.materialId}`}
+                      className="text-link"
+                    >
+                      {attachment.filename}
+                    </a>
+                    <small>
+                      {(attachment.sizeBytes / 1024).toFixed(0)} KB
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           <hr />
           {canStudy ? (
             <>

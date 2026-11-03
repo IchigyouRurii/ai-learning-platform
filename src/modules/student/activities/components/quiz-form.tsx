@@ -56,6 +56,28 @@ function QuestionCard({
   );
 }
 
+function restoreAnswers(latest?: Submission): Record<string, string[]> {
+  if (!latest) return {};
+  try {
+    const parsed: unknown = JSON.parse(latest.answer);
+    if (!Array.isArray(parsed)) return {};
+    const restored: Record<string, string[]> = {};
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const questionId = (item as { questionId?: unknown }).questionId;
+      const selected = (item as { selectedOptionIds?: unknown })
+        .selectedOptionIds;
+      if (typeof questionId !== "string" || !Array.isArray(selected)) continue;
+      restored[questionId] = selected.filter(
+        (id): id is string => typeof id === "string",
+      );
+    }
+    return restored;
+  } catch {
+    return {};
+  }
+}
+
 export function QuizForm({
   courseId,
   difficulty = "beginner",
@@ -95,7 +117,9 @@ export function QuizForm({
       return answer;
     }
   }
-  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [answers, setAnswers] = useState<Record<string, string[]>>(() =>
+    restoreAnswers(latest),
+  );
   const [result, setResult] = useState<QuizResult | null>(null);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();

@@ -6,6 +6,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { getCourseDocumentForAuthor, getCurrentUser } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { Badge, PageHeading } from "@/shared/ui/primitives";
+import { LessonPages } from "@/shared/ui/lesson-pages";
 import { TeacherCourseDiscussion } from "@/modules/teacher/discussions/screens/course-discussion";
 import { PublishButton } from "../components/publish-button";
 
@@ -78,9 +79,7 @@ export async function TeacherCourseDetail({
               <h2>{lesson.title}</h2>
               {lesson.blocks.map((block) =>
                 block.type === "text" ? (
-                  <p className="prose-text" key={block.id}>
-                    {block.body}
-                  </p>
+                  <LessonPages body={block.body} key={block.id} />
                 ) : block.type === "activity" ? (
                   <div className="activity-preview" key={block.id}>
                     <Badge>
@@ -141,6 +140,27 @@ export async function TeacherCourseDetail({
               <li key={index}>{goal}</li>
             ))}
           </ul>
+          {course.attachments?.length ? (
+            <>
+              <hr />
+              <h3>Course materials</h3>
+              <ul className="attachment-list">
+                {course.attachments.map((attachment) => (
+                  <li key={attachment.materialId}>
+                    <a
+                      href={`/api/materials/${attachment.materialId}`}
+                      className="text-link"
+                    >
+                      {attachment.filename}
+                    </a>
+                    <small>
+                      {(attachment.sizeBytes / 1024).toFixed(0)} KB
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           <hr />
           <p className="form-hint">
             Draft revision {document.draftRevision}

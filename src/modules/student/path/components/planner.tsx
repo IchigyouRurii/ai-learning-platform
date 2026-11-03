@@ -62,6 +62,7 @@ export function LearningPathPlanner({
     availableMinutesPerWeek: 180,
   });
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [results, setResults] = useState<Record<string, string>>({});
@@ -80,6 +81,7 @@ export function LearningPathPlanner({
   const openCreate = () => {
     clear();
     setDraft(null);
+    setSelectedCourseIds([]);
     setEditing(true);
   };
   const edit = (path: LearningPathRecord) => {
@@ -343,7 +345,10 @@ export function LearningPathPlanner({
               clear();
               startTransition(async () => {
                 try {
-                  const result = await generatePathAction(profile);
+                  const result = await generatePathAction({
+                    ...profile,
+                    courseIds: selectedCourseIds,
+                  });
                   if (result.ok) setDraft(result.data);
                   else setError(result.error);
                 } catch {
@@ -352,6 +357,48 @@ export function LearningPathPlanner({
               });
             }}
           >
+            <div className="path-course-selection">
+              <h3>1. Choose the courses you want</h3>
+              <MarketplaceCoursePicker
+                courses={courses.filter(
+                  (course) => !selectedCourseIds.includes(course.id),
+                )}
+                disabled={pending}
+                onSelect={(id) =>
+                  setSelectedCourseIds((previous) =>
+                    previous.includes(id) ? previous : [...previous, id],
+                  )
+                }
+              />
+              {selectedCourseIds.length > 0 && (
+                <ul className="selected-course-list">
+                  {selectedCourseIds.map((id) => {
+                    const selectedCourse = byId.get(id);
+                    return (
+                      <li key={id}>
+                        <span>{selectedCourse?.title ?? id}</span>
+                        <button
+                          type="button"
+                          className="text-button danger"
+                          onClick={() =>
+                            setSelectedCourseIds((previous) =>
+                              previous.filter((courseId) => courseId !== id),
+                            )
+                          }
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <p className="form-hint">
+                Select at least one course. AI will choose one difficulty per
+                selected course based on your background and goal.
+              </p>
+            </div>
+            <h3>2. Tell us about yourself</h3>
             <label>
               Your background
               <textarea
@@ -381,24 +428,6 @@ export function LearningPathPlanner({
               />
             </label>
             <label>
-              Preferred difficulty
-              <select
-                value={profile.difficulty}
-                onChange={(event) =>
-                  setProfile({
-                    ...profile,
-                    difficulty: event.target.value as CourseLevel,
-                  })
-                }
-              >
-                {COURSE_LEVELS.map((level) => (
-                  <option key={level} value={level}>
-                    {levelName(level)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
               Study hours per week
               <input
                 type="number"
@@ -419,15 +448,17 @@ export function LearningPathPlanner({
             </label>
             <button
               className="button primary full-width"
-              disabled={pending || !courses.length}
+              disabled={
+                pending || !courses.length || selectedCourseIds.length < 1
+              }
               type="submit"
             >
               <Sparkles size={16} />
               {pending ? "Working…" : "Generate learning path"}
             </button>
             <p className="form-hint">
-              Courses come from Marketplace. You can add more courses and change
-              their order before saving.
+              AI uses only the selected courses and assigns a difficulty to
+              each. You can still adjust levels and order before saving.
             </p>
           </form>
         </section>

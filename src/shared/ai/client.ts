@@ -122,7 +122,7 @@ function serviceError(status: number): Error {
 export async function complete(
   messages: Message[],
   json = false,
-  options: { maxTokens?: number; temperature?: number } = {},
+  options: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
 ): Promise<string> {
   const { provider, key, model, jsonMode, url } = configuration();
   // OpenRouter's free models have different structured-output capabilities.
@@ -153,7 +153,7 @@ export async function complete(
             }
           : {}),
       }),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 90000),
       cache: "no-store",
       redirect: "error",
     });
