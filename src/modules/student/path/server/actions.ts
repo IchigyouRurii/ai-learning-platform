@@ -38,8 +38,19 @@ export async function generatePathAction(
       getCourseCatalog(actor),
     ]);
     const ids = new Set(publicCourses.map((course) => course.id));
+    const selected = profile.courseIds ? new Set(profile.courseIds) : null;
+    if (selected) {
+      const unavailable = [...selected].filter((id) => !ids.has(id));
+      if (unavailable.length)
+        throw new Error(
+          "One or more selected courses are no longer available. Refresh and select again.",
+        );
+      if (selected.size < 1)
+        throw new Error("Select at least one Marketplace course.");
+    }
     const catalog = workspace.courses
       .filter((course) => ids.has(course.id))
+      .filter((course) => !selected || selected.has(course.id))
       .map(catalogItem);
     const generated = await generateLearningPath(profile, catalog);
     await recordGeneration(actor, {

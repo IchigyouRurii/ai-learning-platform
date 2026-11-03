@@ -49,6 +49,7 @@ export function toPublishedCourse(
     audience: course.audience,
     goals: course.goals,
     lessons: course.lessons,
+    attachments: course.attachments,
   };
   return { ...toCatalogCourse(course, author), content: toSafeCourse(content) };
 }

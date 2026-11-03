@@ -158,21 +158,21 @@ it("accepts longer routes without an eight-course product limit", () => {
   expect(result.steps).toHaveLength(12);
 });
 
-it("rejects a one-course generated route", () => {
-  expect(() =>
-    validateAgainstCatalog(
-      {
-        title: "Too short",
-        steps: [
-          {
-            courseId: catalog[0].id,
-            order: 0,
-            targetMinutes: 60,
-            reason: "Start.",
-          },
-        ],
-      },
-      catalog,
-    ),
-  ).toThrow("at least two");
+it("accepts a one-course generated route", () => {
+  const result = validateAgainstCatalog(
+    {
+      title: "Single course",
+      steps: [
+        {
+          courseId: catalog[0].id,
+          order: 0,
+          targetMinutes: 60,
+          reason: "Start.",
+        },
+      ],
+    },
+    catalog,
+  );
+  expect(result.steps).toHaveLength(1);
+  expect(result.steps[0].courseId).toBe(catalog[0].id);
 });

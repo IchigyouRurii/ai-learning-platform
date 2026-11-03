@@ -30,6 +30,7 @@ import type {
   QuizQuestion,
 } from "@/shared/contracts";
 import {
+  addLessonAction,
   generateCourseAction,
   publishCourseRevisionAction,
   rewriteTextAction,
@@ -40,12 +41,58 @@ function newId(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function newQuizBlock(): ContentBlock {
+  const activityId = newId("quiz");
+  const questions = Array.from({ length: 5 }, (_, index) => {
+    const questionId = `${activityId}-q${index + 1}`;
+    const options = ["A", "B", "C", "D"].map((label) => ({
+      id: `${questionId}-${label.toLowerCase()}`,
+      text: `Option ${label}`,
+    }));
+    return {
+      id: questionId,
+      prompt: `Question ${index + 1}`,
+      multiple: false,
+      options,
+      correctOptionIds: [options[0].id],
+      explanation: "Explain why this option is correct.",
+    };
+  });
+  return {
+    id: newId("quiz-block"),
+    type: "activity",
+    activity: {
+      id: activityId,
+      type: "quiz",
+      title: "Check your understanding",
+      prompt: "Answer all five questions.",
+      rubric: "One point per correct answer.",
+      questions,
+    },
+  };
+}
+
+function newReflectionBlock(): ContentBlock {
+  return {
+    id: newId("reflection-block"),
+    type: "activity",
+    activity: {
+      id: newId("reflection"),
+      type: "reflection",
+      title: "Reflect",
+      prompt: "Describe how you would apply this lesson.",
+      rubric: "Look for a concrete situation and a testable next step.",
+    },
+  };
+}
+
 function RewriteBox({
   courseId,
   courseTitle,
   lessonId,
   lessonTitle,
   blockId,
+  kind,
   body,
   onApply,
 }: {
@@ -54,11 +101,16 @@ function RewriteBox({
   lessonId: string;
   lessonTitle: string;
   blockId: string;
+  kind: "text" | "activity";
   body: string;
   onApply: (text: string) => void;
 }) {
   const [instruction, setInstruction] = useState("");
   const [error, setError] = useState("");
+  const [applied, setApplied] = useState<{
+    before: string;
+    after: string;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
   return (
     <div className="rewrite-box">
@@ -80,13 +132,16 @@ function RewriteBox({
                 courseId,
                 lessonId,
                 blockId,
+                kind,
                 courseTitle,
                 lessonTitle,
                 body,
                 instruction,
               });
               if (result.ok) {
+                const before = body;
                 onApply(result.data.text);
+                setApplied({ before, after: result.data.text });
                 setInstruction("");
               } else setError(result.error);
             });
@@ -96,6 +151,27 @@ function RewriteBox({
           {pending ? "Rewriting…" : "AI rewrite"}
         </button>
       </div>
+      {applied && (
+        <div className="rewrite-applied" role="status">
+          <p className="success-text">
+            AI rewrite applied to the editor. Review it below, or undo.
+          </p>
+          <details>
+            <summary>View the AI rewrite</summary>
+            <pre>{applied.after}</pre>
+          </details>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              onApply(applied.before);
+              setApplied(null);
+            }}
+          >
+            Undo this rewrite
+          </button>
+        </div>
+      )}
       {error && (
         <p role="alert" className="error-text">
           {error}
@@ -241,7 +317,8 @@ function ActivityEditor({
           lessonId={lessonId}
           lessonTitle={lessonTitle}
           blockId={blockId}
-          body={`${activity.prompt}\n\n${activity.rubric}`}
+          kind="activity"
+          body={activity.prompt}
           onApply={(text) => update({ prompt: text })}
         />
       )}
@@ -352,6 +429,7 @@ export function CourseEditor({
   );
   const [published, setPublished] = useState(publishedVersion);
   const [message, setMessage] = useState("");
+  const [lessonInstruction, setLessonInstruction] = useState("");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -556,6 +634,9 @@ export function CourseEditor({
                   goals: content.goals.join("\n"),
                   difficulty: level,
                   materials: "",
+                  materialIds: (content.attachments ?? []).map(
+                    (attachment) => attachment.materialId,
+                  ),
                 });
                 if (!result.ok) {
                   setError(result.error);
@@ -653,6 +734,7 @@ export function CourseEditor({
                     lessonId={lesson.id}
                     lessonTitle={lesson.title}
                     blockId={block.id}
+                    kind="text"
                     body={block.body}
                     onApply={(text) =>
                       updateBlock(lessonIndex, blockIndex, {
@@ -706,57 +788,99 @@ export function CourseEditor({
               </div>
             </div>
           ))}
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() =>
-              updateLesson(lessonIndex, {
-                ...lesson,
-                blocks: [
-                  ...lesson.blocks,
-                  {
-                    id: newId("text"),
-                    type: "text",
-                    body: "New explanation.",
-                  },
-                ],
-              })
-            }
-          >
-            <Plus size={14} />
-            Add text block
-          </button>
+          <div className="block-add-actions">
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                updateLesson(lessonIndex, {
+                  ...lesson,
+                  blocks: [
+                    ...lesson.blocks,
+                    {
+                      id: newId("text"),
+                      type: "text",
+                      body: "## New page\n\n- Add a point.\n\n---\n\n## Next page\n\n- Add another point.",
+                    },
+                  ],
+                })
+              }
+            >
+              <Plus size={14} />
+              Add text block
+            </button>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                updateLesson(lessonIndex, {
+                  ...lesson,
+                  blocks: [...lesson.blocks, newQuizBlock()],
+                })
+              }
+            >
+              <Plus size={14} />
+              Add quiz
+            </button>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                updateLesson(lessonIndex, {
+                  ...lesson,
+                  blocks: [...lesson.blocks, newReflectionBlock()],
+                })
+              }
+            >
+              <Plus size={14} />
+              Add activity
+            </button>
+          </div>
         </section>
       ))}
 
       <section className="panel editor-footer">
-        <button
-          type="button"
-          className="button secondary"
-          onClick={() =>
-            update((course) => ({
-              ...course,
-              lessons: [
-                ...course.lessons,
-                {
-                  difficulty: level,
-                  id: newId("lesson"),
-                  title: `Lesson ${visibleLessons.length + 1}`,
-                  blocks: [
-                    {
-                      id: newId("text"),
-                      type: "text",
-                      body: "New explanation.",
-                    },
-                  ],
-                },
-              ],
-            }))
-          }
-        >
-          <Plus size={14} />
-          Add lesson
-        </button>
+        <div className="add-lesson-box">
+          <input
+            value={lessonInstruction}
+            maxLength={2000}
+            placeholder="Topic for the new lesson (AI writes 10 pages + a 5-question quiz)"
+            onChange={(event) => setLessonInstruction(event.target.value)}
+          />
+          <button
+            type="button"
+            className="button secondary"
+            disabled={pending || lessonInstruction.trim().length < 3}
+            onClick={() =>
+              startTransition(async () => {
+                setError("");
+                setMessage("");
+                const revisionToUse = dirty ? await persist() : revision;
+                if (revisionToUse === null) return;
+                const result = await addLessonAction({
+                  courseId,
+                  expectedDraftRevision: revisionToUse,
+                  level,
+                  instruction: lessonInstruction,
+                });
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                setContent(result.data.document.content);
+                setRevision(result.data.document.draftRevision);
+                setDirty(false);
+                setLessonInstruction("");
+                setMessage(
+                  "A new 10-page lesson with a five-question quiz was generated.",
+                );
+              })
+            }
+          >
+            <Sparkles size={14} />
+            Add lesson with AI
+          </button>
+        </div>
         <div className="editor-save">
           <button
             type="button"

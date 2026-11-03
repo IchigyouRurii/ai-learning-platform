@@ -9,6 +9,8 @@ import {
   RotateCcw,
   Save,
   Sparkles,
+  Upload,
+  X,
 } from "lucide-react";
 import {
   COURSE_LEVELS,
@@ -40,7 +42,18 @@ export function CourseGenerator({
     goals: "",
     difficulty: "beginner",
     materials: "",
+    materialIds: [],
   });
+  const [uploaded, setUploaded] = useState<
+    {
+      id: string;
+      filename: string;
+      mimeType: string;
+      sizeBytes: number;
+      extractedCharacters: number;
+    }[]
+  >([]);
+  const [uploading, setUploading] = useState(false);
   const [draft, setDraft] = useState<CourseDraft | null>(null);
   const [level, setLevel] = useState<CourseLevel>("beginner");
   const [generating, setGenerating] = useState<CourseLevel | null>(null);
@@ -51,6 +64,37 @@ export function CourseGenerator({
     key: K,
     value: GenerationInput[K],
   ) => setInput((previous) => ({ ...previous, [key]: value }));
+  async function uploadFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setError("");
+    for (const file of Array.from(files)) {
+      const body = new FormData();
+      body.append("file", file);
+      try {
+        const response = await fetch("/api/materials", {
+          method: "POST",
+          body,
+        });
+        const data = (await response.json()) as {
+          id: string;
+          filename: string;
+          mimeType: string;
+          sizeBytes: number;
+          extractedCharacters: number;
+          error?: string;
+        };
+        if (!response.ok) {
+          setError(data.error ?? `Could not upload ${file.name}.`);
+          continue;
+        }
+        setUploaded((previous) => [...previous, data]);
+      } catch {
+        setError(`Could not upload ${file.name}.`);
+      }
+    }
+    setUploading(false);
+  }
   const lessons = draft ? lessonsAtLevel(draft.lessons, level) : [];
 
   async function generate(levels: readonly CourseLevel[]) {
@@ -60,7 +104,11 @@ export function CourseGenerator({
       for (const difficulty of levels) {
         setGenerating(difficulty);
         setLevel(difficulty);
-        const result = await generateCourseAction({ ...input, difficulty });
+        const result = await generateCourseAction({
+          ...input,
+          difficulty,
+          materialIds: uploaded.map((material) => material.id),
+        });
         if (!result.ok) {
           setError(
             `${difficulty}: ${result.error} Completed materials have been kept.`,
@@ -124,6 +172,53 @@ export function CourseGenerator({
                   );
               }}
             />
+            <div className="material-upload">
+              <span className="field-label">
+                Attachments{" "}
+                <span className="optional">PDF, DOCX, PPTX · max 20 MB</span>
+              </span>
+              <label className="upload-button">
+                <Upload size={15} />
+                {uploading ? "Reading files…" : "Upload files"}
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.pptx,.txt,.md"
+                  disabled={uploading || pending}
+                  onChange={(event) => {
+                    void uploadFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {uploaded.length > 0 && (
+                <ul className="uploaded-list">
+                  {uploaded.map((material) => (
+                    <li key={material.id}>
+                      <FileText size={14} />
+                      <span>{material.filename}</span>
+                      <small>{material.extractedCharacters} chars read</small>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label={`Remove ${material.filename}`}
+                        onClick={() =>
+                          setUploaded((previous) =>
+                            previous.filter((item) => item.id !== material.id),
+                          )
+                        }
+                      >
+                        <X size={13} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="form-hint">
+                Attached files are stored in the database. Their text is read
+                server-side and used as reference material for every level.
+              </p>
+            </div>
             <label>
               Teaching materials <span className="optional">Optional</span>
               <textarea

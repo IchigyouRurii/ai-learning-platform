@@ -5,6 +5,7 @@ import type {
   PublishedCourse,
   CourseDocument,
   CourseDraft,
+  CourseMaterial,
   DemoState,
   GenerationKind,
   GenerationRecord,
@@ -80,4 +81,16 @@ export interface PlatformRepository {
     ownerId: string,
     options?: { kind?: GenerationKind; courseId?: string; limit?: number },
   ): Promise<GenerationRecord[]>;
+  insertMaterial(
+    material: CourseMaterial,
+    content: Uint8Array,
+  ): Promise<CourseMaterial>;
+  findMaterial(
+    id: string,
+  ): Promise<{ material: CourseMaterial; content: Uint8Array } | null>;
+  findMaterialsForOwner(
+    ownerId: string,
+    ids: string[],
+  ): Promise<CourseMaterial[]>;
+  isMaterialPublished(materialId: string): Promise<boolean>;
 }

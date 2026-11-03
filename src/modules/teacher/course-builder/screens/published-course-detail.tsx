@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { getCurrentUser, getPublishedCourse } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { PageHeading, Badge } from "@/shared/ui/primitives";
+import { LessonPages } from "@/shared/ui/lesson-pages";
 
 /** Published, sanitized reading view. Author editing stays on the owner-only route. */
 export async function PublishedCourseDetail({
@@ -54,9 +55,7 @@ export async function PublishedCourseDetail({
               <h2>{lesson.title}</h2>
               {lesson.blocks.map((block) =>
                 block.type === "text" ? (
-                  <p className="prose-text" key={block.id}>
-                    {block.body}
-                  </p>
+                  <LessonPages body={block.body} key={block.id} />
                 ) : block.type === "activity" ? (
                   <div className="activity-preview" key={block.id}>
                     <Badge>
@@ -91,6 +90,27 @@ export async function PublishedCourseDetail({
               <li key={index}>{goal}</li>
             ))}
           </ul>
+          {course.content.attachments?.length ? (
+            <>
+              <hr />
+              <h3>Course materials</h3>
+              <ul className="attachment-list">
+                {course.content.attachments.map((attachment) => (
+                  <li key={attachment.materialId}>
+                    <a
+                      href={`/api/materials/${attachment.materialId}`}
+                      className="text-link"
+                    >
+                      {attachment.filename}
+                    </a>
+                    <small>
+                      {(attachment.sizeBytes / 1024).toFixed(0)} KB
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           {course.ownerId === actor.id && (
             <Link className="button secondary" href={`/teacher/courses/${id}`}>
               Manage in My Creation
