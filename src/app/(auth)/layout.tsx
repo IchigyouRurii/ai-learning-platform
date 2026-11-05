@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from "@/shared/i18n/provider";
 import { Sparkles } from "lucide-react";
 import { BrandLogo } from "@/shared/ui/brand-logo";
 
@@ -40,7 +41,10 @@ export default function AuthLayout({
         </p>
       </section>
       <section className="auth-form-section">
-        <div className="auth-form-card">{children}</div>
+        <div className="auth-form-card">
+          <LanguageSwitcher />
+          {children}
+        </div>
         <p className="auth-footer">
           OpenLearnING · Learn through participation
         </p>
