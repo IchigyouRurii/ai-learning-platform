@@ -1,4 +1,5 @@
 import "server-only";
+import { MATERIAL_UPLOAD_MAX_BYTES } from "@/shared/contracts/material-upload";
 import { cache } from "react";
 import { randomUUID } from "node:crypto";
 import {
@@ -397,6 +398,7 @@ export async function createMaterial(
     sizeBytes: number;
     content: Uint8Array;
     extractedText: string;
+    uploadId?: string;
   },
 ) {
   if (actor.role !== "teacher" && actor.role !== "student")
@@ -410,7 +412,11 @@ export async function createMaterial(
     extractedText: input.extractedText,
     createdAt: new Date().toISOString(),
   };
-  return getRepository().insertMaterial(material, input.content);
+  return getRepository().insertMaterial(
+    material,
+    input.content,
+    input.uploadId ? z.uuid().parse(input.uploadId) : undefined,
+  );
 }
 
 export async function getMaterialForDownload(actor: User, id: string) {
@@ -431,10 +437,7 @@ export async function getMaterialForDownload(actor: User, id: string) {
   return found;
 }
 
-export async function getMaterialsForGeneration(
-  actor: User,
-  ids: string[],
-) {
+export async function getMaterialsForGeneration(actor: User, ids: string[]) {
   if (actor.role !== "teacher" && actor.role !== "student")
     throw new Error("This account cannot use course materials.");
   return getRepository().findMaterialsForOwner(actor.id, [...new Set(ids)]);
@@ -526,4 +529,36 @@ export function calculateProgress(
       ? Math.round((done / activities.length) * 100)
       : 0,
   };
+}
+
+export async function appendMaterialChunk(
+  actor: User,
+  raw: unknown,
+  content: Uint8Array,
+) {
+  if (!["teacher", "student"].includes(actor.role))
+    throw new Error("This account cannot upload course materials.");
+  const input = z
+    .object({
+      id: z.uuid(),
+      filename: z.string().min(1).max(255),
+      mimeType: z.string().min(1).max(200),
+      totalBytes: z.number().int().min(1).max(MATERIAL_UPLOAD_MAX_BYTES),
+      offset: z.number().int().nonnegative(),
+    })
+    .parse(raw);
+  if (
+    !content.length ||
+    content.length > 3_000_000 ||
+    input.offset + content.length > input.totalBytes
+  )
+    throw new Error("Invalid upload chunk size.");
+  const repository = getRepository();
+  if (input.offset === 0) await repository.discardMaterialUpload(actor.id, "");
+  return repository.appendMaterialChunk(actor.id, { ...input, content });
+}
+export async function discardMaterialUpload(actor: User, id: string) {
+  if (!["teacher", "student"].includes(actor.role))
+    throw new Error("This account cannot upload course materials.");
+  return getRepository().discardMaterialUpload(actor.id, z.uuid().parse(id));
 }

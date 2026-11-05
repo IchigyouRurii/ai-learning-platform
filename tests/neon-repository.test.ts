@@ -50,6 +50,7 @@ beforeAll(async () => {
     "202610290002_quiz_scores.sql",
     "202611010001_enrollment_difficulty.sql",
     "202611040001_course_materials.sql",
+    "202611050001_material_upload_chunks.sql",
   ])
     await postgres.database.exec(
       await readFile(
@@ -832,4 +833,95 @@ it("only permits deletion of the student's own personal course", async () => {
     repository.deleteOwnedCourse("student-only-delete", otherStudent.id),
   ).rejects.toThrow();
   expect(await repository.findCourse("student-only-delete")).not.toBeNull();
+});
+
+it("assembles private material chunks in order and rejects foreign, mismatched or expired uploads", async () => {
+  const id = randomUUID();
+  const input = {
+    id,
+    filename: "notes.pdf",
+    mimeType: "application/pdf",
+    totalBytes: 6,
+    offset: 0,
+    content: new Uint8Array([1, 2, 3]),
+  };
+  expect(await repository.appendMaterialChunk(teacher.id, input)).toBeNull();
+  await expect(
+    repository.appendMaterialChunk(student.id, { ...input, offset: 3 }),
+  ).rejects.toThrow();
+  await expect(
+    repository.appendMaterialChunk(teacher.id, { ...input, offset: 2 }),
+  ).rejects.toThrow();
+  await expect(
+    repository.appendMaterialChunk(teacher.id, {
+      ...input,
+      offset: 3,
+      filename: "changed.pdf",
+    }),
+  ).rejects.toThrow();
+  const complete = await repository.appendMaterialChunk(teacher.id, {
+    ...input,
+    offset: 3,
+    content: new Uint8Array([4, 5, 6]),
+  });
+  expect(Array.from(complete!)).toEqual([1, 2, 3, 4, 5, 6]);
+  await repository.discardMaterialUpload(student.id, id);
+  expect(
+    (
+      await postgres.pool.query(
+        "select 1 from course_material_uploads where id=$1",
+        [id],
+      )
+    ).rows,
+  ).toHaveLength(1);
+  await repository.discardMaterialUpload(teacher.id, id);
+  expect(
+    (
+      await postgres.pool.query(
+        "select 1 from course_material_uploads where id=$1",
+        [id],
+      )
+    ).rows,
+  ).toHaveLength(0);
+  await repository.appendMaterialChunk(teacher.id, input);
+  await postgres.pool.query(
+    "update course_material_uploads set expires_at=now()-interval '1 minute' where id=$1",
+    [id],
+  );
+  await expect(
+    repository.appendMaterialChunk(teacher.id, { ...input, offset: 3 }),
+  ).rejects.toThrow();
+});
+
+it("saves completed uploads inside the database without retransmitting file bytes", async () => {
+  const uploadId = randomUUID();
+  const chunk = {
+    id: uploadId,
+    filename: "small.pdf",
+    mimeType: "application/pdf",
+    totalBytes: 3,
+    offset: 0,
+    content: new Uint8Array([1, 2, 3]),
+  };
+  await repository.appendMaterialChunk(teacher.id, chunk);
+  const material = {
+    id: randomUUID(),
+    ownerId: teacher.id,
+    filename: chunk.filename,
+    mimeType: chunk.mimeType,
+    sizeBytes: 3,
+    extractedText: "Notes",
+    createdAt: new Date().toISOString(),
+  };
+  await expect(
+    repository.insertMaterial(
+      { ...material, ownerId: student.id },
+      new Uint8Array(),
+      uploadId,
+    ),
+  ).rejects.toThrow();
+  await repository.insertMaterial(material, new Uint8Array(), uploadId);
+  const saved = await repository.findMaterial(material.id);
+  expect(Array.from(saved!.content)).toEqual([1, 2, 3]);
+  expect(saved!.material.extractedText).toBe("Notes");
 });

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { createMaterial, getSessionUser } from "@/modules/platform";
+import {
+  createMaterial,
+  getSessionUser,
+  appendMaterialChunk,
+  discardMaterialUpload,
+} from "@/modules/platform";
 import {
   MAX_MATERIAL_BYTES,
   extractMaterialText,
@@ -12,7 +17,10 @@ export const maxDuration = 120;
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user)
-    return NextResponse.json({ error: "Please sign in first." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Please sign in first." },
+      { status: 401 },
+    );
 
   let form: FormData;
   try {
@@ -30,10 +38,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
 
-  const filename = (file.name.split(/[\\/]/).pop() ?? "material").slice(
-    0,
-    255,
-  );
+  const filename = (file.name.split(/[\\/]/).pop() ?? "material").slice(0, 255);
   if (!isSupportedMaterial(filename))
     return NextResponse.json(
       { error: "Upload a PDF, DOCX, PPTX, TXT or Markdown file." },
@@ -41,11 +46,39 @@ export async function POST(request: Request) {
     );
   if (file.size > MAX_MATERIAL_BYTES)
     return NextResponse.json(
-      { error: "The file is larger than 20 MB." },
+      { error: "The file must be smaller than 5 MB." },
       { status: 400 },
     );
 
-  const content = new Uint8Array(await file.arrayBuffer());
+  let content: Uint8Array = new Uint8Array(await file.arrayBuffer());
+  const uploadId = form.get("uploadId");
+  let sizeBytes = file.size;
+  if (uploadId !== null) {
+    try {
+      sizeBytes = Number(form.get("totalBytes"));
+      const complete = await appendMaterialChunk(
+        user,
+        {
+          id: uploadId,
+          filename,
+          mimeType: file.type || "application/octet-stream",
+          totalBytes: sizeBytes,
+          offset: Number(form.get("offset")),
+        },
+        content,
+      );
+      if (!complete) return NextResponse.json({ pending: true });
+      content = complete;
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "The file could not be assembled. Please retry the upload; if it persists, check that database migrations are applied.",
+        },
+        { status: 400 },
+      );
+    }
+  }
   let extractedText: string;
   try {
     extractedText = await extractMaterialText(
@@ -69,10 +102,13 @@ export async function POST(request: Request) {
     const material = await createMaterial(user, {
       filename,
       mimeType: file.type || "application/octet-stream",
-      sizeBytes: file.size,
+      sizeBytes,
       content,
       extractedText,
+      uploadId: typeof uploadId === "string" ? uploadId : undefined,
     });
+    if (typeof uploadId === "string")
+      await discardMaterialUpload(user, uploadId);
     return NextResponse.json({
       id: material.id,
       filename: material.filename,
@@ -80,11 +116,11 @@ export async function POST(request: Request) {
       sizeBytes: material.sizeBytes,
       extractedCharacters: extractedText.length,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "The upload failed.",
+          "The file could not be saved. Please check database connectivity and initialization.",
       },
       { status: 500 },
     );

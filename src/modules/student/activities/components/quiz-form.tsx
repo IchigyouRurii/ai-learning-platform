@@ -28,8 +28,10 @@ function QuestionCard({
   return (
     <fieldset className="quiz-question">
       <legend>
-        <span className="quiz-number">{index + 1}</span>
-        {question.prompt}
+        <span className="quiz-question-heading">
+          <span className="quiz-number">{index + 1}</span>
+          <span>{question.prompt}</span>
+        </span>
       </legend>
       <div className="quiz-options">
         {question.options.map((option) => {

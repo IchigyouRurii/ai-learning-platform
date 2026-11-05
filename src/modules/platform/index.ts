@@ -36,6 +36,8 @@ export {
   listGenerationRecords,
   recordGeneration,
   createMaterial,
+  appendMaterialChunk,
+  discardMaterialUpload,
   getMaterialForDownload,
   getMaterialsForGeneration,
 } from "./server/services";

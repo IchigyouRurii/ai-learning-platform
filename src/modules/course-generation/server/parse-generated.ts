@@ -1,12 +1,13 @@
 import { courseDraftSchema, type CourseDraft } from "@/shared/contracts";
 
-function extractJson(raw: string): unknown {
+export function extractJson(raw: string): unknown {
   const trimmed = raw.trim();
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
   const candidates = [fenced?.[1]?.trim() ?? trimmed];
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
-  if (first >= 0 && last > first) candidates.push(trimmed.slice(first, last + 1));
+  if (first >= 0 && last > first)
+    candidates.push(trimmed.slice(first, last + 1));
   for (const candidate of candidates) {
     try {
       return JSON.parse(candidate);

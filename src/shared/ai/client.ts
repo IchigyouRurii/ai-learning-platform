@@ -1,4 +1,8 @@
 import "server-only";
+import {
+  decodeCompletionResponse,
+  type CompletionEnvelope,
+} from "./completion-response";
 
 type Message = { role: "system" | "user"; content: string };
 type Provider = "mock" | "openai-compatible" | "openrouter";
@@ -122,7 +126,12 @@ function serviceError(status: number): Error {
 export async function complete(
   messages: Message[],
   json = false,
-  options: { maxTokens?: number; temperature?: number; timeoutMs?: number } = {},
+  options: {
+    maxTokens?: number;
+    temperature?: number;
+    timeoutMs?: number;
+    stream?: boolean;
+  } = {},
 ): Promise<string> {
   const { provider, key, model, jsonMode, url } = configuration();
   // OpenRouter's free models have different structured-output capabilities.
@@ -140,6 +149,9 @@ export async function complete(
       body: JSON.stringify({
         model,
         messages,
+        ...(options.stream && provider === "openrouter"
+          ? { stream: true }
+          : {}),
         max_tokens: options.maxTokens ?? (json ? 6000 : 1000),
         ...(options.temperature === undefined
           ? {}
@@ -163,17 +175,28 @@ export async function complete(
     );
   }
   if (!response.ok) throw serviceError(response.status);
-  let result: {
-    error?: { code?: number };
-    choices?: {
-      finish_reason?: string;
-      message?: { content?: string | null; refusal?: string | null };
-    }[];
-  };
+  let body: string;
   try {
-    result = await response.json();
+    body = await response.text();
   } catch {
-    throw new Error("Invalid AI response format. Please try again later.");
+    throw new Error(
+      "The AI connection was interrupted while receiving the response. Please retry later.",
+    );
+  }
+  let result: CompletionEnvelope;
+  try {
+    result = decodeCompletionResponse(
+      body,
+      response.headers.get("content-type") ?? "",
+    );
+  } catch (error) {
+    // Metadata only: never log response content, prompts, documents, or credentials.
+    console.warn("AI response could not be decoded", {
+      status: response.status,
+      contentType: response.headers.get("content-type"),
+      characters: body.length,
+    });
+    throw error;
   }
   if (!result || typeof result !== "object")
     throw new Error("The AI service returned no valid response.");
