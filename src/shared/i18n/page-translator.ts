@@ -32,6 +32,13 @@ const hasWords = (text: string) =>
   /\p{L}/u.test(text) &&
   !/^https?:\/\/\S+$/.test(text) &&
   !/^[^\s@]+@[^\s@]+$/.test(text);
+/** React marks host elements it has rendered or hydrated. Server markup that
+ * is still waiting for hydration carries no such mark, and rewriting its text
+ * would make React discard (and re-render) that subtree. */
+const isHydrated = (element: Element) =>
+  Object.keys(element).some(
+    (key) => key.startsWith("__reactFiber$") || key.startsWith("__reactProps$"),
+  );
 
 /**
  * Switch bundled interface copy to the selected language. Course text, code,
@@ -47,8 +54,12 @@ export function startInterfaceTranslation({
 }) {
   const { tracked, textEntries, attributeEntries } = registry;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let idle: number | undefined;
+  let poll: ReturnType<typeof setTimeout> | undefined;
+  let attempts = 0;
 
   function apply() {
+    let waiting = false;
     const walker = document.createTreeWalker(
       document.body,
       NodeFilter.SHOW_TEXT,
@@ -61,6 +72,10 @@ export function startInterfaceTranslation({
         !hasWords(node.data)
       )
         continue;
+      if (!isHydrated(node.parentElement)) {
+        waiting = true;
+        continue;
+      }
       let entry = textEntries.get(node);
       if (!entry) {
         entry = {
@@ -81,6 +96,10 @@ export function startInterfaceTranslation({
       "[placeholder], [title], [aria-label], [alt]",
     )) {
       if (node.closest(ignored)) continue;
+      if (!isHydrated(node)) {
+        waiting = true;
+        continue;
+      }
       let entries = attributeEntries.get(node);
       if (!entries) {
         entries = new Map();
@@ -123,6 +142,29 @@ export function startInterfaceTranslation({
         entry.write(output);
       }
     }
+
+    if (waiting) pollLater();
+  }
+
+  /**
+   * Hydration attaches no DOM mutation older passes could observe, so markup
+   * skipped while it waited for React is retried until it is hydrated.
+   */
+  function pollLater() {
+    if (attempts >= 80) return;
+    attempts += 1;
+    clearTimeout(poll);
+    poll = setTimeout(apply, 250);
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    if (idle !== undefined) cancelIdleCallback(idle);
+    if (typeof requestIdleCallback === "function") {
+      idle = requestIdleCallback(apply, { timeout: 200 });
+    } else {
+      timer = setTimeout(apply, 0);
+    }
   }
 
   const observer = new MutationObserver((records) => {
@@ -139,8 +181,7 @@ export function startInterfaceTranslation({
             (record.target as Element).getAttribute(record.attributeName!)),
     );
     if (!changed) return;
-    clearTimeout(timer);
-    timer = setTimeout(apply, 0);
+    schedule();
   });
   observer.observe(document.body, {
     subtree: true,
@@ -149,9 +190,11 @@ export function startInterfaceTranslation({
     attributes: true,
     attributeFilter: attributes,
   });
-  apply();
+  schedule();
   return () => {
     clearTimeout(timer);
+    clearTimeout(poll);
+    if (idle !== undefined) cancelIdleCallback(idle);
     observer.disconnect();
   };
 }

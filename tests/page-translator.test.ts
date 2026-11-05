@@ -4,11 +4,15 @@ import {
   startInterfaceTranslation,
 } from "@/shared/i18n/page-translator";
 
+type Parent = {
+  closest: (selector: string) => string | null;
+  [key: string]: unknown;
+};
 type Node = {
   data: string;
   readonly textContent: string;
   isConnected: boolean;
-  parentElement: { closest: (selector: string) => string | null };
+  parentElement: Parent;
 };
 
 let observer: MutationCallback | undefined;
@@ -22,6 +26,7 @@ function page(nodes: Node[], attributes: Record<string, string>[] = []) {
     setAttribute: (name: string, value: string) => {
       values[name] = value;
     },
+    __reactFiber$test: {},
   }));
   vi.stubGlobal("NodeFilter", { SHOW_TEXT: 4 });
   vi.stubGlobal(
@@ -52,6 +57,7 @@ function page(nodes: Node[], attributes: Record<string, string>[] = []) {
 function text(
   data: string,
   closest: (selector: string) => string | null = () => null,
+  hydrated = true,
 ): Node {
   return {
     data,
@@ -59,7 +65,10 @@ function text(
       return this.data;
     },
     isConnected: true,
-    parentElement: { closest },
+    parentElement: {
+      closest,
+      ...(hydrated ? { __reactFiber$test: {} } : {}),
+    },
   };
 }
 
@@ -74,9 +83,11 @@ it("switches known interface copy in both directions", () => {
   const [node] = page([text("Password")]);
   const registry = createTranslationRegistry();
   const stopChinese = startInterfaceTranslation({ locale: "zh", registry });
+  vi.advanceTimersByTime(0);
   expect(node.data).toBe("密码");
   stopChinese();
   const stopEnglish = startInterfaceTranslation({ locale: "en", registry });
+  vi.advanceTimersByTime(0);
   expect(node.data).toBe("Password");
   stopEnglish();
 });
@@ -91,9 +102,24 @@ it("keeps course text, code and editable content in their original language", ()
     locale: "zh",
     registry: createTranslationRegistry(),
   });
+  vi.advanceTimersByTime(0);
   expect(course.data).toBe("A private lesson body");
   expect(code.data).toBe("Password");
   expect(known.data).toBe("欢迎回到 OpenLearnING");
+});
+
+it("keeps server markup untouched until React hydrates it", () => {
+  const node = text("Password", () => null, false);
+  page([node]);
+  startInterfaceTranslation({
+    locale: "zh",
+    registry: createTranslationRegistry(),
+  });
+  vi.advanceTimersByTime(0);
+  expect(node.data).toBe("Password");
+  node.parentElement["__reactFiber$test"] = {};
+  vi.advanceTimersByTime(250);
+  expect(node.data).toBe("密码");
 });
 
 it("translates attributes such as placeholders", () => {
@@ -105,6 +131,7 @@ it("translates attributes such as placeholders", () => {
     locale: "zh",
     registry: createTranslationRegistry(),
   });
+  vi.advanceTimersByTime(0);
   expect(values.placeholder).toBe("输入密码");
 });
 
@@ -114,6 +141,7 @@ it("refills text that React re-renders after the first pass", async () => {
     locale: "zh",
     registry: createTranslationRegistry(),
   });
+  vi.advanceTimersByTime(0);
   expect(node.data).toBe("密码");
   node.data = "Email";
   observer?.(
