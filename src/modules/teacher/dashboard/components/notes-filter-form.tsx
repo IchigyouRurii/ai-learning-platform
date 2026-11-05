@@ -3,7 +3,7 @@ import { Button } from "@/shared/ui/components/button";
 import { Label } from "@/shared/ui/components/label";
 
 const selectClass =
-  "h-10 rounded-[var(--ui-control-radius)] border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+  "h-10 w-full rounded-[var(--ui-control-radius)] border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function NotesFilterForm({
   courseOptions,
@@ -26,6 +26,7 @@ export function NotesFilterForm({
             id="notes-course"
             name="course"
             defaultValue={selectedCourseId}
+            data-slot="select"
             className={selectClass}
           >
             <option value="">All courses</option>
@@ -42,6 +43,7 @@ export function NotesFilterForm({
             id="notes-status"
             name="status"
             defaultValue={status}
+            data-slot="select"
             className={selectClass}
           >
             <option value="all">All statuses</option>
