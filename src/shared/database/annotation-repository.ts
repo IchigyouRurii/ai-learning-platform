@@ -4,6 +4,7 @@ import type {
   AnnotationCategory,
   AnnotationStatus,
   ContentAnnotation,
+  OpenAnnotationCount,
   Role,
 } from "@/shared/contracts";
 import { createNeonRepository } from "./neon-repository";
@@ -167,6 +168,28 @@ export function createAnnotationRepository(pool: Pool): AnnotationRepository {
         items: result.rows.map(annotationFromRow),
         nextCursor: null,
       } satisfies Page<ContentAnnotation>;
+    },
+
+    async openCounts(actor, filter) {
+      if (actor.role !== "teacher") return [];
+      const values: unknown[] = [actor.id];
+      const conditions = ["c.owner_id = $1", "a.status = 'open'"];
+      if (filter.courseId) {
+        values.push(filter.courseId);
+        conditions.push(`a.course_id = $${values.length}`);
+      }
+      const result = await pool.query<OpenAnnotationCount>(
+        `select a.course_id as "courseId",
+                a.student_id as "studentId",
+                count(*)::int as "count"
+         from content_annotations a
+         join courses c on c.id = a.course_id
+         where ${conditions.join(" and ")}
+         group by a.course_id, a.student_id
+         order by a.course_id, a.student_id`,
+        values,
+      );
+      return result.rows;
     },
 
     async reply(actor, annotationId, message) {

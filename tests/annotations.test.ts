@@ -118,6 +118,48 @@ describe("content annotations", () => {
     ).toBeNull();
   });
 
+  it("counts open annotations per course and student for the owning teacher", async () => {
+    const first = await annotations.create(student, {
+      courseId: "course-1",
+      courseVersion: 1,
+      lessonId,
+      blockId,
+      category: "question",
+      message: "First open question",
+    });
+    await annotations.create(student, {
+      courseId: "course-1",
+      courseVersion: 1,
+      lessonId,
+      blockId,
+      category: "unclear",
+      message: "Second open question",
+    });
+    await annotations.create(peer, {
+      courseId: "course-1",
+      courseVersion: 1,
+      lessonId,
+      blockId,
+      category: "question",
+      message: "Peer question",
+    });
+
+    expect(await annotations.openCounts(teacher, {})).toEqual([
+      { courseId: "course-1", studentId: student.id, count: 2 },
+      { courseId: "course-1", studentId: peer.id, count: 1 },
+    ]);
+    expect(
+      await annotations.openCounts(teacher, { courseId: "course-1" }),
+    ).toHaveLength(2);
+    expect(await annotations.openCounts(otherTeacher, {})).toEqual([]);
+
+    await annotations.reply(teacher, first!.id, "Resolved by reply.");
+    expect(await annotations.openCounts(teacher, {})).toEqual([
+      { courseId: "course-1", studentId: student.id, count: 1 },
+      { courseId: "course-1", studentId: peer.id, count: 1 },
+    ]);
+  });
+
   it("rejects a block that is not part of the published version", async () => {
     expect(
       await annotations.create(student, {

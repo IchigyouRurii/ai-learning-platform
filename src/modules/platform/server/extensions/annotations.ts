@@ -75,6 +75,18 @@ export function createAnnotationService(
       }
     },
 
+    async openCounts(actorInput, raw) {
+      try {
+        const actor = requireActor(actorInput);
+        requireRole(actor, annotationFeatures.openCounts.roles);
+        const input = annotationFeatures.openCounts.input.parse(raw);
+        const counts = await getRepository().openCounts(actor, input);
+        return { ok: true, data: counts };
+      } catch (error) {
+        return featureFailure(error);
+      }
+    },
+
     async reply(actorInput, raw) {
       try {
         const actor = requireActor(actorInput);

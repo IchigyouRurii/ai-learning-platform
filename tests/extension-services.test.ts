@@ -81,6 +81,7 @@ const inputs = {
     },
     listMine: { courseId: "course", courseVersion: 1 },
     listForTeacher: {},
+    openCounts: {},
     reply: { annotationId: "annotation", message: "这里可以这样理解" },
     resolve: { annotationId: "annotation" },
     markSeen: { annotationId: "annotation" },
@@ -252,7 +253,7 @@ describe("reserved service boundaries", () => {
     expect(
       capabilities.filter((item) => item.status === "reserved"),
     ).toHaveLength(reservedCount);
-    expect(implemented).toHaveLength(27);
+    expect(implemented).toHaveLength(28);
     expect(
       implemented.every(
         (item) =>
