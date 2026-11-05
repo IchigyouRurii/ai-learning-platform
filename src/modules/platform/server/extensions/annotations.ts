@@ -136,8 +136,21 @@ export function createAnnotationService(
 }
 
 let defaultRepository: AnnotationRepository | undefined;
+let defaultRepositoryFactory: typeof createAnnotationRepository | undefined;
+let defaultRepositoryPool: ReturnType<typeof getDatabasePool> | undefined;
 
 export const annotations = createAnnotationService(() => {
-  defaultRepository ??= createAnnotationRepository(getDatabasePool());
+  const pool = getDatabasePool();
+  // A hot update can change the factory or replace the pool. Rebind instead of
+  // keeping a stale adapter pointed at an ended pool.
+  if (
+    !defaultRepository ||
+    defaultRepositoryFactory !== createAnnotationRepository ||
+    defaultRepositoryPool !== pool
+  ) {
+    defaultRepository = createAnnotationRepository(pool);
+    defaultRepositoryFactory = createAnnotationRepository;
+    defaultRepositoryPool = pool;
+  }
   return defaultRepository;
 });
