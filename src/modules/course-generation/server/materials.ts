@@ -3,7 +3,8 @@ import JSZip from "jszip";
 import mammoth from "mammoth";
 import { extractText as extractPdfText } from "unpdf";
 
-export const MAX_MATERIAL_BYTES = 20_000_000;
+import { MATERIAL_UPLOAD_MAX_BYTES } from "@/shared/contracts/material-upload";
+export const MAX_MATERIAL_BYTES = MATERIAL_UPLOAD_MAX_BYTES;
 export const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".pptx", ".txt", ".md"];
 
 export function isSupportedMaterial(filename: string) {
@@ -68,17 +69,16 @@ export async function extractMaterialText(
   filename: string,
   mimeType: string,
 ): Promise<string> {
-  if (buffer.byteLength === 0)
-    throw new Error("The uploaded file is empty.");
+  if (buffer.byteLength === 0) throw new Error("The uploaded file is empty.");
   if (buffer.byteLength > MAX_MATERIAL_BYTES)
-    throw new Error("The uploaded file is larger than 20 MB.");
+    throw new Error("The uploaded file must be smaller than 5 MB.");
 
   const extension = extensionOf(filename);
   const mime = mimeType.toLowerCase();
   let text = "";
 
   if (extension === ".pdf" || mime === "application/pdf") {
-    const result = await extractPdfText(buffer, { mergePages: true });
+    const result = await extractPdfText(buffer.slice(), { mergePages: true });
     text = result.text;
   } else if (
     extension === ".docx" ||

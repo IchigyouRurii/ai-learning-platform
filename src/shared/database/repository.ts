@@ -81,9 +81,22 @@ export interface PlatformRepository {
     ownerId: string,
     options?: { kind?: GenerationKind; courseId?: string; limit?: number },
   ): Promise<GenerationRecord[]>;
+  appendMaterialChunk(
+    ownerId: string,
+    input: {
+      id: string;
+      filename: string;
+      mimeType: string;
+      totalBytes: number;
+      offset: number;
+      content: Uint8Array;
+    },
+  ): Promise<Uint8Array | null>;
+  discardMaterialUpload(ownerId: string, id: string): Promise<void>;
   insertMaterial(
     material: CourseMaterial,
     content: Uint8Array,
+    uploadId?: string,
   ): Promise<CourseMaterial>;
   findMaterial(
     id: string,

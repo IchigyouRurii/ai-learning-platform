@@ -7,7 +7,7 @@ import {
 } from "@/shared/contracts";
 import { complete, getAIProvider } from "@/shared/ai/client";
 import { lessonSystemPrompt, lessonUserMessage } from "../prompts/lesson";
-import { pageMarkdown, splitMarkdownPages } from "./generate";
+import { pageMarkdown, splitMarkdownPages } from "./lesson-structure";
 
 export type LessonInput = {
   courseTitle: string;
@@ -26,7 +26,8 @@ function parseLesson(raw: string): Lesson {
   const first = trimmed.indexOf("{");
   const last = trimmed.lastIndexOf("}");
   const candidates = [fenced?.[1]?.trim() ?? trimmed];
-  if (first >= 0 && last > first) candidates.push(trimmed.slice(first, last + 1));
+  if (first >= 0 && last > first)
+    candidates.push(trimmed.slice(first, last + 1));
   for (const candidate of candidates) {
     try {
       const parsed = lessonSchema.safeParse(JSON.parse(candidate));
@@ -47,15 +48,17 @@ function assertLesson(lesson: Lesson) {
   );
   if (!text)
     throw new Error("The generated lesson needs a text block with pages.");
-  if (splitMarkdownPages(text.body).length !== PAGES)
+  const pageCount = splitMarkdownPages(text.body).length;
+  if (pageCount < 1 || pageCount > PAGES)
     throw new Error(
-      `The generated lesson must contain exactly ${PAGES} Markdown pages separated by ---.`,
+      `The generated lesson must contain 1 to ${PAGES} Markdown pages separated by ---.`,
     );
   if (!quiz || quiz.type !== "activity")
     throw new Error("The generated lesson needs exactly one quiz activity.");
-  if ((quiz.activity.questions?.length ?? 0) !== QUESTIONS)
+  const questionCount = quiz.activity.questions?.length ?? 0;
+  if (questionCount < 1 || questionCount > QUESTIONS)
     throw new Error(
-      `The generated lesson quiz must contain exactly ${QUESTIONS} questions.`,
+      `The generated lesson quiz must contain 1 to ${QUESTIONS} questions.`,
     );
   return lesson;
 }
@@ -105,13 +108,38 @@ function mockLesson(input: LessonInput): Lesson {
 
 export async function generateLesson(input: LessonInput): Promise<Lesson> {
   if (getAIProvider() === "mock") return mockLesson(input);
-  const text = await complete(
-    [
-      { role: "system", content: lessonSystemPrompt(input.difficulty) },
-      { role: "user", content: lessonUserMessage(input) },
-    ],
-    true,
-    { maxTokens: 4000, temperature: 0.5, timeoutMs: 180000 },
-  );
-  return assertLesson(parseLesson(text));
+  const messages = [
+    { role: "system" as const, content: lessonSystemPrompt(input.difficulty) },
+    { role: "user" as const, content: lessonUserMessage(input) },
+  ];
+  try {
+    const text = await complete(messages, true, {
+      maxTokens: 8000,
+      temperature: 0.5,
+      timeoutMs: 180000,
+      stream: true,
+    });
+    return assertLesson(parseLesson(text));
+  } catch (error) {
+    // Retry only explicit output exhaustion, once, with the same configured
+    // model. Never retry auth, quota, rate-limit or network failures here.
+    if (
+      !(error instanceof Error) ||
+      !error.message.startsWith("Model output was truncated.")
+    )
+      throw error;
+    const text = await complete(
+      [
+        ...messages,
+        {
+          role: "user",
+          content:
+            "The response exceeded the output budget. Regenerate this lesson as complete JSON with 1-3 focused pages, at most 40 words per page, concise questions/options and explanations under 15 words. Include 1-5 quiz questions based on the lesson content, without repetition. Return the complete lesson, not a continuation.",
+        },
+      ],
+      true,
+      { maxTokens: 12000, temperature: 0.3, timeoutMs: 180000, stream: true },
+    );
+    return assertLesson(parseLesson(text));
+  }
 }

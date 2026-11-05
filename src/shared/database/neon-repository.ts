@@ -798,7 +798,67 @@ export function createNeonRepository(pool: Pool): PlatformRepository {
         createdAt: timestamp(row.created_at),
       }));
     },
-    async insertMaterial(material, content) {
+    async appendMaterialChunk(ownerId, input) {
+      const query =
+        input.offset === 0
+          ? `insert into course_material_uploads (id,owner_id,filename,mime_type,total_bytes,content)
+           select $1,$2,$3,$4,$5,$7 where $6::int=0
+             and exists(select 1 from "user" where id=$2 and role in ('teacher','student'))
+             and (select count(*) from course_material_uploads where owner_id=$2 and expires_at>now()) < 5
+           on conflict(id) do nothing
+           returning case when octet_length(content)=total_bytes then content else null end as content`
+          : `update course_material_uploads set content=content || $7
+           where id=$1 and owner_id=$2 and filename=$3 and mime_type=$4 and total_bytes=$5
+             and octet_length(content)=$6 and expires_at>now()
+             and exists(select 1 from "user" where id=$2 and role in ('teacher','student'))
+           returning case when octet_length(content)=total_bytes then content else null end as content`;
+      const result = await pool.query<{ content: Buffer | null }>(query, [
+        input.id,
+        ownerId,
+        input.filename,
+        input.mimeType,
+        input.totalBytes,
+        input.offset,
+        Buffer.from(input.content),
+      ]);
+      if (!result.rows.length)
+        throw new Error(
+          "Upload expired, out of order, or too many uploads in progress. Please try again.",
+        );
+      return result.rows[0].content
+        ? new Uint8Array(result.rows[0].content)
+        : null;
+    },
+    async discardMaterialUpload(ownerId, id) {
+      await pool.query(
+        "delete from course_material_uploads where owner_id=$1 and (id=$2 or expires_at<=now())",
+        [ownerId, id],
+      );
+    },
+    async insertMaterial(material, content, uploadId) {
+      if (uploadId) {
+        const result = await pool.query(
+          `insert into course_materials (id,owner_id,filename,mime_type,size_bytes,content,extracted_text,created_at)
+          select $1,$2,$3,$4,$5,u.content,$6,$7 from course_material_uploads u
+          where u.id=$8 and u.owner_id=$2 and u.filename=$3 and u.mime_type=$4
+            and u.total_bytes=$5 and octet_length(u.content)=u.total_bytes and u.expires_at>now()
+          returning id`,
+          [
+            material.id,
+            material.ownerId,
+            material.filename,
+            material.mimeType,
+            material.sizeBytes,
+            material.extractedText,
+            material.createdAt,
+            uploadId,
+          ],
+        );
+        if (!result.rows.length)
+          throw new Error("The completed upload is no longer available.");
+        return material;
+      }
+
       await pool.query(
         `insert into course_materials (id, owner_id, filename, mime_type, size_bytes, content, extracted_text, created_at) values ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [

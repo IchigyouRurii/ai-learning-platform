@@ -1,4 +1,5 @@
 "use client";
+import { uploadMaterial } from "./upload-material";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -25,7 +26,10 @@ import {
 } from "@/shared/contracts";
 import { CourseDetailsFields } from "./course-details-fields";
 import { CourseLevelTabs } from "@/shared/ui/course-level-tabs";
-import { generateCourseAction, saveCourseAction } from "../server/actions";
+import {
+  generateCourseLevelsAction,
+  saveCourseAction,
+} from "../server/actions";
 
 export function CourseGenerator({
   mode,
@@ -54,9 +58,10 @@ export function CourseGenerator({
     }[]
   >([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [draft, setDraft] = useState<CourseDraft | null>(null);
   const [level, setLevel] = useState<CourseLevel>("beginner");
-  const [generating, setGenerating] = useState<CourseLevel | null>(null);
+  const [generating, setGenerating] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -69,28 +74,21 @@ export function CourseGenerator({
     setUploading(true);
     setError("");
     for (const file of Array.from(files)) {
-      const body = new FormData();
-      body.append("file", file);
       try {
-        const response = await fetch("/api/materials", {
-          method: "POST",
-          body,
-        });
-        const data = (await response.json()) as {
-          id: string;
-          filename: string;
-          mimeType: string;
-          sizeBytes: number;
-          extractedCharacters: number;
-          error?: string;
-        };
-        if (!response.ok) {
-          setError(data.error ?? `Could not upload ${file.name}.`);
-          continue;
-        }
+        const data = await uploadMaterial(file, ({ phase, percent }) =>
+          setUploadStatus(
+            phase === "finishing"
+              ? "Finishing upload and reading file…"
+              : `Uploading ${percent}%…`,
+          ),
+        );
         setUploaded((previous) => [...previous, data]);
-      } catch {
-        setError(`Could not upload ${file.name}.`);
+      } catch (error) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : `Could not upload ${file.name}.`,
+        );
       }
     }
     setUploading(false);
@@ -101,19 +99,24 @@ export function CourseGenerator({
     setError("");
     try {
       if (levels.length === 3) setDraft(null);
-      for (const difficulty of levels) {
-        setGenerating(difficulty);
-        setLevel(difficulty);
-        const result = await generateCourseAction({
+      setGenerating(levels.length === 3 ? "all levels" : levels[0]);
+      setLevel(levels[0]);
+      const batch = await generateCourseLevelsAction(
+        {
           ...input,
-          difficulty,
           materialIds: uploaded.map((material) => material.id),
-        });
+        },
+        levels,
+      );
+      if (!batch.ok) {
+        setError(batch.error);
+        return;
+      }
+      const failures: string[] = [];
+      for (const { level: difficulty, result } of batch.data) {
         if (!result.ok) {
-          setError(
-            `${difficulty}: ${result.error} Completed materials have been kept.`,
-          );
-          break;
+          failures.push(`${difficulty}: ${result.error}`);
+          continue;
         }
         setDraft((previous) => ({
           ...(previous ?? result.data),
@@ -127,6 +130,8 @@ export function CourseGenerator({
           ],
         }));
       }
+      if (failures.length)
+        setError(`${failures.join(" ")} Completed levels have been kept.`);
     } finally {
       setGenerating(null);
     }
@@ -175,11 +180,13 @@ export function CourseGenerator({
             <div className="material-upload">
               <span className="field-label">
                 Attachments{" "}
-                <span className="optional">PDF, DOCX, PPTX · max 20 MB</span>
+                <span className="optional">PDF, DOCX, PPTX · under 5 MB</span>
               </span>
               <label className="upload-button">
                 <Upload size={15} />
-                {uploading ? "Reading files…" : "Upload files"}
+                {uploading
+                  ? uploadStatus || "Preparing upload…"
+                  : "Upload files"}
                 <input
                   type="file"
                   multiple

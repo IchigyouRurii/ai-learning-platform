@@ -49,6 +49,16 @@ function toDocument(course: Course): CourseDocument {
 export function createLocalPlatformRepository(
   store: Repository,
 ): PlatformRepository {
+  const uploads = new Map<
+    string,
+    {
+      ownerId: string;
+      filename: string;
+      mimeType: string;
+      totalBytes: number;
+      content: Uint8Array;
+    }
+  >();
   return {
     async listOwnedCatalog(actor) {
       if (!actor?.id || !["teacher", "student"].includes(actor.role))
@@ -612,6 +622,36 @@ export function createLocalPlatformRepository(
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, options.limit ?? 20);
+    },
+    async appendMaterialChunk(ownerId, input) {
+      const previous = uploads.get(input.id);
+      if (
+        previous &&
+        (previous.ownerId !== ownerId ||
+          previous.filename !== input.filename ||
+          previous.mimeType !== input.mimeType ||
+          previous.totalBytes !== input.totalBytes)
+      )
+        throw new Error("Upload mismatch.");
+      if (
+        (previous?.content.length ?? 0) !== input.offset ||
+        input.offset + input.content.length > input.totalBytes
+      )
+        throw new Error("Upload out of order.");
+      const content = new Uint8Array(input.offset + input.content.length);
+      if (previous) content.set(previous.content);
+      content.set(input.content, input.offset);
+      uploads.set(input.id, {
+        ownerId,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        totalBytes: input.totalBytes,
+        content,
+      });
+      return content.length === input.totalBytes ? content : null;
+    },
+    async discardMaterialUpload(ownerId, id) {
+      if (uploads.get(id)?.ownerId === ownerId) uploads.delete(id);
     },
     async insertMaterial(material: CourseMaterial, content: Uint8Array) {
       return store.mutate((state) => {

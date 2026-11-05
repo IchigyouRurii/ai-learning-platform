@@ -15,11 +15,18 @@ import type {
   ActionResult,
   CourseDocument,
   CourseDraft,
+  CourseLevel,
   GenerationInput,
   Lesson,
 } from "@/shared/contracts";
-import { courseLevelSchema } from "@/shared/contracts";
+import {
+  courseLevelSchema,
+  courseLevel,
+  generationInputSchema,
+} from "@/shared/contracts";
 import { actionError } from "@/shared/contracts/errors";
+import { compactReferenceMaterials } from "./reference-digest";
+import { createGenerationQueue } from "./generation-queue";
 import { generateCourse } from "./generate";
 import { generateLesson } from "./lesson";
 import { rewriteText } from "./rewrite";
@@ -28,41 +35,89 @@ export async function generateCourseAction(
   input: GenerationInput,
 ): Promise<ActionResult<CourseDraft>> {
   try {
+    const parsed = generationInputSchema.parse(input);
+    const batch = await generateCourseLevelsAction(parsed, [
+      courseLevel(
+        parsed.difficulty === "intermediate" ? "advanced" : parsed.difficulty,
+      ),
+    ]);
+    return batch.ok ? batch.data[0].result : batch;
+  } catch (error) {
+    return { ok: false, error: actionError(error) };
+  }
+}
+
+export async function generateCourseLevelsAction(
+  raw: GenerationInput,
+  requestedLevels: readonly CourseLevel[],
+): Promise<
+  ActionResult<Array<{ level: CourseLevel; result: ActionResult<CourseDraft> }>>
+> {
+  try {
+    const input = generationInputSchema.parse(raw);
+    const levels = z
+      .array(courseLevelSchema)
+      .min(1)
+      .max(3)
+      .refine((values) => new Set(values).size === values.length)
+      .parse(requestedLevels);
     const actor = await getCurrentUser();
     if (actor.role !== "teacher" && actor.role !== "student")
       throw new Error("This account cannot generate courses.");
     const materialIds = input.materialIds ?? [];
-    const materials = await getMaterialsForGeneration(actor, materialIds);
+    const materials = materialIds.length
+      ? await getMaterialsForGeneration(actor, materialIds)
+      : [];
     if (materials.length !== new Set(materialIds).size)
       throw new Error(
         "Some attachments are unavailable. Upload them again before generating.",
       );
-    const combinedMaterials = [
-      input.materials,
-      ...materials.map(
-        (material) => `### ${material.filename}\n${material.extractedText}`,
-      ),
-    ]
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 20000);
-    const generated = await generateCourse({
-      ...input,
-      materials: combinedMaterials,
-    });
+    const combinedMaterials = compactReferenceMaterials(
+      [
+        input.materials,
+        ...materials.map(
+          (material) => `### ${material.filename}\n${material.extractedText}`,
+        ),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      input.topic,
+      input.goals,
+    );
     const attachments = materials.map((material) => ({
       materialId: material.id,
       filename: material.filename,
       mimeType: material.mimeType,
       sizeBytes: material.sizeBytes,
     }));
-    const course = { ...generated, attachments };
-    await recordGeneration(actor, {
-      kind: "course",
-      input: { ...input, materials: combinedMaterials },
-      result: course,
-    });
-    return { ok: true, data: course };
+    const schedule = createGenerationQueue(3);
+    const results = await Promise.all(
+      levels.map(async (level) => {
+        try {
+          const generated = await generateCourse(
+            { ...input, difficulty: level, materials: combinedMaterials },
+            schedule,
+          );
+          const course = { ...generated, attachments };
+          await recordGeneration(actor, {
+            kind: "course",
+            input: {
+              ...input,
+              difficulty: level,
+              materials: combinedMaterials,
+            },
+            result: course,
+          });
+          return { level, result: { ok: true as const, data: course } };
+        } catch (error) {
+          return {
+            level,
+            result: { ok: false as const, error: actionError(error) },
+          };
+        }
+      }),
+    );
+    return { ok: true, data: results };
   } catch (error) {
     return { ok: false, error: actionError(error) };
   }
@@ -143,10 +198,7 @@ export async function addLessonAction(
   try {
     const input = addLessonSchema.parse(raw);
     const actor = await getCurrentUser();
-    const document = await getCourseDocumentForAuthor(
-      actor,
-      input.courseId,
-    );
+    const document = await getCourseDocumentForAuthor(actor, input.courseId);
     const materialIds = (document.content.attachments ?? []).map(
       (attachment) => attachment.materialId,
     );
@@ -158,13 +210,15 @@ export async function addLessonAction(
         .filter((item) => (item.difficulty ?? "beginner") === input.level)
         .map((item) => item.title),
       instruction: input.instruction,
-      materials: materials
-        .map(
-          (material) =>
-            `### ${material.filename}\n${material.extractedText}`,
-        )
-        .join("\n\n")
-        .slice(0, 20000),
+      materials: compactReferenceMaterials(
+        materials
+          .map(
+            (material) => `### ${material.filename}\n${material.extractedText}`,
+          )
+          .join("\n\n"),
+        document.content.title,
+        input.instruction,
+      ),
     });
     const updated = await updateCourseDraft(
       actor,

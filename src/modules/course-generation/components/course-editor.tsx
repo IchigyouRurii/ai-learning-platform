@@ -844,7 +844,7 @@ export function CourseEditor({
           <input
             value={lessonInstruction}
             maxLength={2000}
-            placeholder="Topic for the new lesson (AI writes 10 pages + a 5-question quiz)"
+            placeholder="Topic for the new lesson (AI chooses the page count + 1-5 quiz questions)"
             onChange={(event) => setLessonInstruction(event.target.value)}
           />
           <button

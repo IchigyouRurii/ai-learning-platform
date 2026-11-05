@@ -55,3 +55,10 @@ describe("course material extraction", () => {
     ).rejects.toThrow("Unsupported");
   });
 });
+
+// Reject at the exact boundary before parsing or accessing external services.
+it("rejects new attachments at 5 MB before extraction", async () => {
+  await expect(
+    extractMaterialText(new Uint8Array(5_000_000), "large.txt", "text/plain"),
+  ).rejects.toThrow("smaller than 5 MB");
+});
