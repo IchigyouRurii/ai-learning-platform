@@ -247,6 +247,10 @@ describe("Neon SQL repository", () => {
     expect((await repository.getWorkspace(otherStudent)).feedback).toHaveLength(
       0,
     );
+    expect((await repository.getWorkspace(teacher)).feedback).toHaveLength(1);
+    expect(
+      (await repository.getWorkspace({ ...teacher, id: "teacher-2" })).feedback,
+    ).toHaveLength(0);
     expect((await repository.getWorkspace(teacher)).members[0].name).toBe(
       student.name,
     );

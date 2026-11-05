@@ -114,6 +114,14 @@ export async function TeacherStudents({ courseId }: { courseId?: string } = {}) 
               annotation.courseId === course.id &&
               annotation.student.id === enrollment.studentId,
           );
+          const sentFeedback = workspace.feedback
+            .filter(
+              (item) =>
+                item.courseId === course.id &&
+                item.studentId === enrollment.studentId &&
+                item.teacherId === actor.id,
+            )
+            .toReversed();
           const annotationContext = Object.fromEntries(
             course.lessons.flatMap((lesson) =>
               lesson.blocks.map((block) => [
@@ -187,6 +195,25 @@ export async function TeacherStudents({ courseId }: { courseId?: string } = {}) 
                 courseId={course.id}
                 studentId={enrollment.studentId}
               />
+              <details className="submission-detail">
+                <summary>Sent feedback ({sentFeedback.length})</summary>
+                {sentFeedback.length ? (
+                  <div className="mt-3">
+                    {sentFeedback.map((item) => (
+                      <article className="feedback-note" key={item.id}>
+                        <p className="prose-text">{item.message}</p>
+                        <small>
+                          {new Date(item.createdAt).toLocaleString("en-US", {
+                            timeZone: "Asia/Shanghai",
+                          })}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">No feedback sent to this student yet.</p>
+                )}
+              </details>
               <ContentQuestions
                 courseId={course.id}
                 annotations={studentAnnotations}
