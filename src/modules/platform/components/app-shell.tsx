@@ -1,3 +1,4 @@
+import { LanguageSwitcher } from "@/shared/i18n/provider";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { BrandLogo } from "@/shared/ui/brand-logo";
@@ -60,6 +61,7 @@ export function AppShell({
             </div>
           )}
           <div className="topbar-right">
+            <LanguageSwitcher />
             {user.role === "teacher" && (
               <Link
                 href="/teacher/courses/new"

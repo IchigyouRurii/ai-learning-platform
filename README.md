@@ -125,3 +125,13 @@ package.json                     # 项目依赖与运行命令
 为采用协作者的 `feat/class-management`，本分支已移除重复的教师、学生和管理员班级实现及导航入口。原有班级契约与 `platformExtensions.classrooms` 恢复为预留状态，合法调用返回 `NOT_IMPLEMENTED`；班级页面在协作者接入前暂不可用。
 
 数据库迁移及已有数据保留，不运行回滚或删除 SQL。学习流程暂只使用独立选课；原班级授权记录保留，但不用于授予访问。学生仍可主动加入未下架的公开教学课程。协作者合并前需处理当前数据库结构、报名来源和管理员下架规则的兼容性，详见 [班级交接说明](docs/engineering/classrooms.md)。
+
+## Interface translation
+
+Login, registration and workspace headers offer English / Simplified Chinese in a shared language menu. The `ui-locale` cookie saves the choice for one year, so every page renders in the selected language on load and across navigation.
+
+Interface copy switches locally from the dictionary in `src/shared/i18n/messages.ts`; there is no translation API, model call or network request. A `MutationObserver` keeps watching the page, picks up text that React renders after the first pass, and applies the dictionary through the same registry.
+
+Course titles, descriptions, lesson bodies and submissions stay in the language their author wrote, because a fixed dictionary cannot translate arbitrary content.
+
+The translator rewrites displayed text and attributes only: stored revisions, submissions, form values, editable fields, code blocks and branding remain intact. Course content, editable areas and the language control are excluded from local rewriting, and the language control is marked `translate="no"` so browser translation leaves it alone. Password visibility and authentication behavior remain outside this feature.

@@ -1949,3 +1949,87 @@ summary {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Shared language control: the trigger stays on the header's center line. */
+.language-control {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.language-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.language-trigger:hover,
+.language-trigger[data-state="open"] {
+  background: var(--ui-label-background);
+}
+.language-trigger:focus-visible {
+  outline: 2px solid var(--ui-link);
+  outline-offset: 3px;
+}
+.language-chevron {
+  flex: none;
+  transition: transform 150ms ease;
+}
+.language-trigger[data-state="open"] .language-chevron {
+  transform: rotate(180deg);
+}
+.language-menu {
+  z-index: 100;
+  width: max-content;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  overflow-y: auto;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgb(24 39 70 / 12%);
+}
+.language-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 15px;
+  color: var(--ui-text);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+.language-option[data-state="checked"] {
+  color: #4263eb;
+  background: #f2f3f5;
+}
+.language-option[data-highlighted] {
+  background: var(--ui-label-background);
+}
+.auth-form-card > .language-control {
+  display: flex;
+  width: fit-content;
+  margin: 0 0 24px auto;
+}
+@media (max-width: 600px) {
+  .language-trigger {
+    gap: 5px;
+    padding-inline: 6px;
+    font-size: 13px;
+  }
+}
