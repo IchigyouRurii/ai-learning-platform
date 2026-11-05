@@ -23,7 +23,7 @@ export async function createAnnotationAction(input: {
     const result = await platformExtensions.annotations.create(actor, input);
     if (!result.ok) return { ok: false, error: result.error };
     revalidatePath(`/student/courses/${input.courseId}`);
-    revalidatePath("/teacher/students");
+    revalidatePath("/teacher/students", "layout");
     return { ok: true, data: result.data };
   } catch (error) {
     return { ok: false, error: actionError(error) };

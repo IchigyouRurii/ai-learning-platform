@@ -49,6 +49,7 @@ pages; communication lookup failures display Unavailable rather than zero.
 Awaiting reply is clickable and opens a centered accessible dialog. It lists the
 bound course when pending items exist, with separate discussion and private-note
 links. Each class currently binds one course. Discussion links target the course
-Q&A section; private-note links filter Teaching Management by courseId. Empty and
+Q&A section; private-note links open the course-filtered Private notes view in
+Teaching Management with the open status selected. Empty and
 unavailable states are explicit. Counts remain scoped to current class members;
 destination pages retain their normal course-wide teacher access.

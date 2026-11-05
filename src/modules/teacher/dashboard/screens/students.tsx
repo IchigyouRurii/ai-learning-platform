@@ -1,4 +1,5 @@
-import { Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, BookOpen, Users } from "lucide-react";
 import {
   calculateProgress,
   getCurrentUser,
@@ -6,222 +7,444 @@ import {
   platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
+import { AnnotationItem } from "@/modules/teacher/annotations/components/content-questions";
+import type { ContentAnnotation, Course } from "@/shared/contracts";
+import { Pagination } from "@/shared/ui/components/pagination";
+import { Badge, EmptyState, PageHeading } from "@/shared/ui/primitives";
+import { NotesFilterForm } from "../components/notes-filter-form";
+import { TeachingFilterForm } from "../components/teaching-filter-form";
+import { annotationContext } from "../annotation-context";
 import {
-  Badge,
-  EmptyState,
-  PageHeading,
-  ProgressBar,
-} from "@/shared/ui/primitives";
-import { ContentQuestions } from "@/modules/teacher/annotations/components/content-questions";
-import { FeedbackForm } from "../components/feedback-form";
-import type { Course } from "@/shared/contracts";
+  buildStudentsHref,
+  groupStudentCourses,
+  paginate,
+  parsePageNumber,
+  toParamArray,
+  type StudentCourseInput,
+  type TeachingFilters,
+} from "../teaching-filters";
 
-function activityTitle(course: Course, activityId: string) {
-  const block = course.lessons
-    .flatMap((lesson) => lesson.blocks)
-    .find(
-      (item) => item.type === "activity" && item.activity.id === activityId,
-    );
-  return block?.type === "activity" ? block.activity.title : activityId;
-}
+const firstParam = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
 
-function readableAnswer(course: Course, activityId: string, answer: string) {
-  try {
-    const parsed = JSON.parse(answer) as unknown;
-    if (!Array.isArray(parsed)) return answer;
-    const activity = course.lessons
-      .flatMap((lesson) => lesson.blocks)
-      .find(
-        (block) =>
-          block.type === "activity" && block.activity.id === activityId,
-      );
-    if (!activity || activity.type !== "activity") return answer;
-    const questions = activity.activity.questions;
-    if (!questions?.length) return answer;
-    return parsed
-      .map((item, index) => {
-        const entry = item as {
-          questionId?: string;
-          selectedOptionIds?: string[];
-        };
-        const question = questions.find(
-          (candidate) => candidate.id === entry.questionId,
-        );
-        if (!question) return `Q${index + 1}: ${JSON.stringify(item)}`;
-        const selected = (entry.selectedOptionIds ?? [])
-          .map(
-            (id) =>
-              question.options.find((option) => option.id === id)?.text ?? id,
-          )
-          .join(", ");
-        return `Q${index + 1}: ${selected || "(no answer)"}`;
-      })
-      .join("\n");
-  } catch {
-    return answer;
-  }
-}
+const dateLabel = (value: string) =>
+  new Date(value).toLocaleDateString("en-US", {
+    timeZone: "Asia/Shanghai",
+  });
 
-export async function TeacherStudents({ courseId }: { courseId?: string } = {}) {
+export async function TeacherTeachingManagement({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
   const actor = await getCurrentUser();
   if (actor.role !== "teacher") return <RoleGate expected="teacher" />;
-  const [workspace, annotationPage] = await Promise.all([
+
+  const viewParam = firstParam(searchParams.view);
+  const legacyCourseId = firstParam(searchParams.courseId)?.trim() ?? "";
+  const view =
+    viewParam === "notes" || (!viewParam && legacyCourseId)
+      ? "notes"
+      : "students";
+  const rawStatus = firstParam(searchParams.status) ?? "all";
+  const notesStatus = ["open", "replied", "resolved"].includes(rawStatus)
+    ? rawStatus
+    : "all";
+  const notesCourseId =
+    firstParam(searchParams.course)?.trim() || legacyCourseId;
+
+  const [workspace, classPage, countsResult, notesResult] = await Promise.all([
     getWorkspace(actor),
-    platformExtensions.annotations.listForTeacher(actor, { limit: 100, courseId }),
+    platformExtensions.classrooms.listMine(actor, { limit: 100 }),
+    platformExtensions.annotations.openCounts(actor, {}),
+    view === "notes"
+      ? platformExtensions.annotations.listForTeacher(actor, {
+          courseId: notesCourseId || undefined,
+          limit: 100,
+        })
+      : Promise.resolve(null),
   ]);
-  const annotations = annotationPage.ok ? annotationPage.data.items : [];
+
+  const classes = classPage.ok ? classPage.data.items : [];
+  const memberResults = await Promise.all(
+    classes.map((classroom) =>
+      platformExtensions.classrooms.listMembers(actor, {
+        classId: classroom.id,
+      }),
+    ),
+  );
+  const memberships = classes.flatMap((classroom, index) => {
+    const result = memberResults[index];
+    if (!result.ok) return [];
+    return [
+      {
+        id: classroom.id,
+        name: classroom.name,
+        courseId: classroom.courseId,
+        studentIds: result.data.map((member) => member.student.id),
+      },
+    ];
+  });
+
+  const coursesById = new Map(
+    workspace.courses.map((course) => [course.id, course]),
+  );
+  const memberNames = new Map(
+    workspace.members.map((member) => [member.id, member.name]),
+  );
+  const openCountsAvailable = countsResult.ok;
+  const openCounts = new Map(
+    (countsResult.ok ? countsResult.data : []).map((item) => [
+      `${item.courseId}:${item.studentId}`,
+      item.count,
+    ]),
+  );
+  const feedbackCounts = new Map<string, number>();
+  for (const feedback of workspace.feedback) {
+    if (feedback.teacherId !== actor.id) continue;
+    const key = `${feedback.courseId}:${feedback.studentId}`;
+    feedbackCounts.set(key, (feedbackCounts.get(key) ?? 0) + 1);
+  }
+  const lastActivities = new Map<string, string>();
+  for (const submission of workspace.submissions) {
+    const key = `${submission.courseId}:${submission.studentId}`;
+    const previous = lastActivities.get(key);
+    if (!previous || submission.createdAt > previous) {
+      lastActivities.set(key, submission.createdAt);
+    }
+  }
+
+  const classIdsFor = (courseId: string, studentId: string) =>
+    memberships
+      .filter(
+        (membership) =>
+          membership.courseId === courseId &&
+          membership.studentIds.includes(studentId),
+      )
+      .map((membership) => membership.id);
+  const classNamesFor = (courseId: string, studentId: string) =>
+    memberships
+      .filter(
+        (membership) =>
+          membership.courseId === courseId &&
+          membership.studentIds.includes(studentId),
+      )
+      .map((membership) => membership.name);
+
+  const pairs: StudentCourseInput[] = [];
+  for (const enrollment of workspace.enrollments) {
+    const course = coursesById.get(enrollment.courseId);
+    if (!course) continue;
+    const key = `${course.id}:${enrollment.studentId}`;
+    const progress = calculateProgress(
+      course,
+      workspace.submissions,
+      enrollment.studentId,
+      enrollment.difficulty,
+    );
+    pairs.push({
+      studentId: enrollment.studentId,
+      studentName: memberNames.get(enrollment.studentId) ?? "Student",
+      courseId: course.id,
+      courseTitle: course.title,
+      classIds: classIdsFor(course.id, enrollment.studentId),
+      classNames: classNamesFor(course.id, enrollment.studentId),
+      done: progress.done,
+      total: progress.total,
+      percent: progress.percent,
+      lastActivityAt: lastActivities.get(key) ?? null,
+      sentFeedbackCount: feedbackCounts.get(key) ?? 0,
+      openNoteCount: openCounts.get(key) ?? 0,
+    });
+  }
+
+  const filters: TeachingFilters = {
+    courseIds: toParamArray(searchParams.course),
+    classIds: toParamArray(searchParams.class),
+    studentQuery: firstParam(searchParams.student)?.trim() ?? "",
+  };
+  if (!filters.courseIds.length && legacyCourseId) {
+    filters.courseIds = [legacyCourseId];
+  }
+  const students = groupStudentCourses(pairs, filters);
+  const pageData = paginate(students, parsePageNumber(searchParams.page));
+  const returnTo = buildStudentsHref(filters, pageData.page);
+  const enrolledCourseIds = new Set(
+    workspace.enrollments.map((enrollment) => enrollment.courseId),
+  );
+  const courseOptions = workspace.courses
+    .filter((course) => enrolledCourseIds.has(course.id))
+    .map((course) => ({ id: course.id, title: course.title }))
+    .toSorted((a, b) => a.title.localeCompare(b.title));
+  const classOptions = memberships
+    .filter(
+      (membership) =>
+        enrolledCourseIds.has(membership.courseId) &&
+        membership.studentIds.some((studentId) =>
+          workspace.enrollments.some(
+            (enrollment) =>
+              enrollment.courseId === membership.courseId &&
+              enrollment.studentId === studentId,
+          ),
+        ),
+    )
+    .map((membership) => ({
+      id: membership.id,
+      name: membership.name,
+      courseId: membership.courseId,
+      courseTitle:
+        coursesById.get(membership.courseId)?.title ?? "Unknown course",
+    }))
+    .toSorted(
+      (a, b) =>
+        a.courseTitle.localeCompare(b.courseTitle) ||
+        a.name.localeCompare(b.name),
+    );
+
+  const allNotes = notesResult?.ok ? notesResult.data.items : [];
+  const notes =
+    notesStatus === "all"
+      ? allNotes
+      : allNotes.filter((note) => note.status === notesStatus);
+  const notesByCourse = new Map<string, ContentAnnotation[]>();
+  for (const note of notes) {
+    const group = notesByCourse.get(note.courseId) ?? [];
+    group.push(note);
+    notesByCourse.set(note.courseId, group);
+  }
+  const noteCourses = [...notesByCourse.keys()]
+    .map((courseId) => coursesById.get(courseId))
+    .filter((course): course is Course => Boolean(course))
+    .toSorted((a, b) => a.title.localeCompare(b.title));
+  const notesHref = notesCourseId
+    ? `/teacher/students?view=notes&course=${encodeURIComponent(notesCourseId)}`
+    : "/teacher/students?view=notes";
+  const tabClass = "border-b-2 px-3 py-2 text-sm font-medium transition-colors";
+  const activeTab = "border-primary text-foreground";
+  const inactiveTab =
+    "border-transparent text-muted-foreground hover:text-foreground";
+  const filtersActive =
+    filters.courseIds.length > 0 ||
+    filters.classIds.length > 0 ||
+    filters.studentQuery.length > 0;
+
   return (
     <>
       <PageHeading
         eyebrow="PARTICIPATION & FEEDBACK"
         title="Teaching Management"
-        description="Review course participation and submissions, and guide each learner."
+        description="Filter students by course, class or name, then open one student to review submissions, feedback and private notes."
       />
-      <div id="private-notes" className="inline-note scroll-mt-6">
-        <Users size={17} />
-        <span>
-          Participation appears here after enrollment. Progress is based on
-          submitted activities.
-        </span>
+      {!classPage.ok && (
+        <p className="error-text" role="alert">
+          Class list unavailable: {classPage.error}
+        </p>
+      )}
+      {!openCountsAvailable && (
+        <p className="form-hint">
+          Private-note counts are temporarily unavailable. Open a student to
+          read their notes.
+        </p>
+      )}
+
+      <div className="mb-4 flex gap-1 border-b border-border">
+        <Link
+          href={buildStudentsHref(filters, 1)}
+          className={`${tabClass} ${view === "students" ? activeTab : inactiveTab}`}
+          aria-current={view === "students" ? "page" : undefined}
+        >
+          Students
+        </Link>
+        <Link
+          href={notesHref}
+          className={`${tabClass} ${view === "notes" ? activeTab : inactiveTab}`}
+          aria-current={view === "notes" ? "page" : undefined}
+        >
+          Private notes
+        </Link>
       </div>
-      {!workspace.enrollments.length ? (
-        <EmptyState title="No students enrolled yet">
-          Publish a course to start receiving enrollments and activity
-          submissions.
-        </EmptyState>
-      ) : (
-        workspace.enrollments.filter((enrollment) => !courseId || enrollment.courseId === courseId).map((enrollment) => {
-          const course = workspace.courses.find(
-            (item) => item.id === enrollment.courseId,
-          );
-          if (!course) return null;
-          const progress = calculateProgress(
-            course,
-            workspace.submissions,
-            enrollment.studentId,
-          );
-          const submissions = workspace.submissions
-            .filter(
-              (item) =>
-                item.courseId === course.id &&
-                item.studentId === enrollment.studentId &&
-                item.courseVersion === course.version,
-            )
-            .slice()
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-          const studentAnnotations = annotations.filter(
-            (annotation) =>
-              annotation.courseId === course.id &&
-              annotation.student.id === enrollment.studentId,
-          );
-          const sentFeedback = workspace.feedback
-            .filter(
-              (item) =>
-                item.courseId === course.id &&
-                item.studentId === enrollment.studentId &&
-                item.teacherId === actor.id,
-            )
-            .toReversed();
-          const annotationContext = Object.fromEntries(
-            course.lessons.flatMap((lesson) =>
-              lesson.blocks.map((block) => [
-                block.id,
-                {
-                  lessonTitle: lesson.title,
-                  label:
-                    block.type === "text"
-                      ? block.body.replace(/\s+/g, " ").slice(0, 80)
-                      : block.type === "activity"
-                        ? block.activity.title
-                        : block.type,
-                },
-              ]),
-            ),
-          );
-          return (
-            <section
-              className="panel learner-panel"
-              key={`${course.id}-${enrollment.studentId}`}
-            >
-              <div className="learner-header">
-                <div className="learner-name">
-                  <span className="avatar">S</span>
-                  <div>
-                    <h3>
-                      {workspace.members.find(
-                        (member) => member.id === enrollment.studentId,
-                      )?.name ?? "Student"}
-                    </h3>
-                    <p className="muted">{course.title}</p>
-                  </div>
+
+      {view === "students" ? (
+        <>
+          <TeachingFilterForm
+            courseOptions={courseOptions}
+            classOptions={classOptions}
+            filters={filters}
+            matchingCount={students.length}
+          />
+          {pageData.items.length ? (
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>Students</h2>
+                  <p className="muted">
+                    Sorted by name. Open a student to see every course they take
+                    with you.
+                  </p>
                 </div>
-                <Badge tone={progress.percent === 100 ? "green" : "neutral"}>
-                  {progress.percent === 100
-                    ? "Activities submitted"
-                    : "In progress"}
-                </Badge>
-              </div>
-              <div className="learner-progress">
-                <ProgressBar percent={progress.percent} />
-                <span>
-                  {progress.done} / {progress.total} activities
+                <span className="muted text-sm">
+                  Showing {(pageData.page - 1) * pageData.pageSize + 1}–
+                  {Math.min(
+                    pageData.page * pageData.pageSize,
+                    pageData.totalItems,
+                  )}{" "}
+                  of {pageData.totalItems}
                 </span>
               </div>
-              {submissions.length ? (
-                submissions.map((submission) => (
-                  <details className="submission-detail" key={submission.id}>
-                    <summary>
-                      {activityTitle(course, submission.activityId)} ·{" "}
-                      {new Date(submission.createdAt).toLocaleString("en-US", {
-                        timeZone: "Asia/Shanghai",
-                      })}
-                    </summary>
-                    <h4>Student answer</h4>
-                    <p className="prose-text">
-                      {readableAnswer(
-                        course,
-                        submission.activityId,
-                        submission.answer,
-                      )}
-                    </p>
-                    <h4>Learning feedback</h4>
-                    <p className="prose-text muted">{submission.aiFeedback}</p>
-                  </details>
-                ))
-              ) : (
-                <p className="muted">Enrolled; no activities submitted yet.</p>
-              )}
-              <FeedbackForm
-                courseId={course.id}
-                studentId={enrollment.studentId}
-              />
-              <details className="submission-detail">
-                <summary>Sent feedback ({sentFeedback.length})</summary>
-                {sentFeedback.length ? (
-                  <div className="mt-3">
-                    {sentFeedback.map((item) => (
-                      <article className="feedback-note" key={item.id}>
-                        <p className="prose-text">{item.message}</p>
-                        <small>
-                          {new Date(item.createdAt).toLocaleString("en-US", {
-                            timeZone: "Asia/Shanghai",
-                          })}
-                        </small>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="muted">No feedback sent to this student yet.</p>
-                )}
-              </details>
-              <ContentQuestions
-                courseId={course.id}
-                annotations={studentAnnotations}
-                context={annotationContext}
+              <div className="grid gap-3">
+                {pageData.items.map((student) => (
+                  <Link
+                    key={student.id}
+                    href={`/teacher/students/${encodeURIComponent(student.id)}?course=${encodeURIComponent(student.courses[0].courseId)}&return=${encodeURIComponent(returnTo)}`}
+                    className="block rounded-[var(--ui-card-radius)] border border-border p-4 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold">
+                          {student.name}
+                        </h3>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {student.courses.map((course) => (
+                            <span
+                              key={course.courseId}
+                              className="inline-flex flex-wrap items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs"
+                            >
+                              <BookOpen size={12} aria-hidden="true" />
+                              {course.courseTitle}
+                              <span className="text-muted-foreground">
+                                ·{" "}
+                                {course.classNames.length
+                                  ? course.classNames.join(", ")
+                                  : "No class"}
+                              </span>
+                              <span className="text-muted-foreground">
+                                · {course.percent}%
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1 text-right text-sm">
+                        <Badge
+                          tone={student.openNoteCount ? "amber" : "neutral"}
+                        >
+                          {openCountsAvailable
+                            ? `${student.openNoteCount} open notes`
+                            : "Notes unavailable"}
+                        </Badge>
+                        <span className="muted">
+                          {student.sentFeedbackCount} feedback sent
+                        </span>
+                        <span className="muted">
+                          {student.lastActivityAt
+                            ? `Last activity ${dateLabel(student.lastActivityAt)}`
+                            : "No activity yet"}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="mt-3 inline-flex items-center gap-1 text-sm text-primary">
+                      Open student
+                      <ArrowUpRight size={14} aria-hidden="true" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              <Pagination
+                page={pageData.page}
+                totalPages={pageData.totalPages}
+                hrefForPage={(page) => buildStudentsHref(filters, page)}
               />
             </section>
-          );
-        })
+          ) : (
+            <EmptyState
+              title={
+                filtersActive
+                  ? "No students match these filters"
+                  : "No students enrolled yet"
+              }
+            >
+              {filtersActive
+                ? "Adjust or reset the filters to see enrolled students."
+                : "Publish a course or add students to a class to start tracking participation."}
+            </EmptyState>
+          )}
+        </>
+      ) : (
+        <section id="private-notes" className="scroll-mt-6">
+          <NotesFilterForm
+            courseOptions={courseOptions}
+            selectedCourseId={notesCourseId}
+            status={notesStatus}
+            noteCount={notes.length}
+          />
+          {notesResult && !notesResult.ok ? (
+            <p className="error-text" role="alert">
+              Private notes unavailable: {notesResult.error}
+            </p>
+          ) : !notes.length ? (
+            <EmptyState title="No private notes match these filters">
+              Notes appear here when students ask about a specific content
+              block, and only you and that student can read them.
+            </EmptyState>
+          ) : (
+            <div className="grid gap-4">
+              {noteCourses.map((course) => {
+                const context = annotationContext(course);
+                const courseNotes = notesByCourse.get(course.id) ?? [];
+                const byStudent = new Map<string, ContentAnnotation[]>();
+                for (const note of courseNotes) {
+                  const group = byStudent.get(note.student.id) ?? [];
+                  group.push(note);
+                  byStudent.set(note.student.id, group);
+                }
+                return (
+                  <section className="panel" key={course.id}>
+                    <div className="panel-heading">
+                      <div>
+                        <h2>{course.title}</h2>
+                        <p className="muted">
+                          {courseNotes.length}{" "}
+                          {courseNotes.length === 1 ? "note" : "notes"}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/teacher/courses/${course.id}#course-qa`}
+                        className="text-link text-sm"
+                      >
+                        Open course Q&A
+                      </Link>
+                    </div>
+                    <div className="grid gap-4">
+                      {[...byStudent.values()]
+                        .toSorted((a, b) =>
+                          a[0].student.name.localeCompare(b[0].student.name),
+                        )
+                        .map((studentNotes) => (
+                          <div key={studentNotes[0].student.id}>
+                            <h3 className="flex items-center gap-2 text-sm font-semibold">
+                              <Users size={14} aria-hidden="true" />
+                              {studentNotes[0].student.name}
+                            </h3>
+                            <div className="mt-2 grid gap-3">
+                              {studentNotes.map((note) => (
+                                <AnnotationItem
+                                  key={note.id}
+                                  courseId={course.id}
+                                  annotation={note}
+                                  context={context}
+                                  showCourseLink={false}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
     </>
   );

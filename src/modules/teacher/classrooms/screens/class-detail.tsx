@@ -264,7 +264,10 @@ export async function TeacherClassDetail({
                 retaken.
               </p>
             </div>
-            <Link href="/teacher/students" className="text-link">
+            <Link
+              href={`/teacher/students?class=${encodeURIComponent(id)}`}
+              className="text-link"
+            >
               View submissions &amp; feedback
             </Link>
           </div>
