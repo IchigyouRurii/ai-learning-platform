@@ -11,7 +11,11 @@ import {
   platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
-import { calculateQuizProgress, type Course } from "@/shared/contracts";
+import {
+  calculateQuizProgress,
+  lessonsAtLevel,
+  type Course,
+} from "@/shared/contracts";
 import {
   Table,
   TableBody,
@@ -93,9 +97,26 @@ export async function TeacherClassDetail({
   const course = workspace.courses.find(
     (item) => item.id === classroom.courseId,
   );
+  const advancedLessons = course
+    ? lessonsAtLevel(course.lessons, "advanced")
+    : [];
+  const advancedQuizIds = new Set(
+    advancedLessons.flatMap((lesson) =>
+      lesson.blocks.flatMap((block) =>
+        block.type === "activity" && block.activity.type === "quiz"
+          ? [block.activity.id]
+          : [],
+      ),
+    ),
+  );
   const rows = members.map((member) => {
     const quiz = course
-      ? calculateQuizProgress(course, workspace.submissions, member.student.id)
+      ? calculateQuizProgress(
+          course,
+          workspace.submissions,
+          member.student.id,
+          "advanced",
+        )
       : null;
     const latestQuiz = course
       ? workspace.submissions
@@ -104,16 +125,17 @@ export async function TeacherClassDetail({
               item.courseId === course.id &&
               item.courseVersion === course.version &&
               item.studentId === member.student.id &&
-              item.score != null,
+              item.score != null &&
+              advancedQuizIds.has(item.activityId),
           )
           .slice()
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
       : undefined;
     return { member, quiz, latestQuiz };
   });
-  const lessonsWithQuizzes = course
-    ? course.lessons.filter((lesson) => quizIdsForLesson(lesson).length).length
-    : 0;
+  const lessonsWithQuizzes = advancedLessons.filter(
+    (lesson) => quizIdsForLesson(lesson).length,
+  ).length;
   const completedStudents = rows.filter((row) => row.quiz?.completed).length;
   const memberIds = new Set(members.map((member) => member.student.id));
   const participating = new Set(
@@ -154,7 +176,7 @@ export async function TeacherClassDetail({
     cursor = page.data.nextCursor ?? undefined;
   } while (cursor);
   const chapterStats = course
-    ? course.lessons.flatMap((lesson) => {
+    ? lessonsAtLevel(course.lessons, "advanced").flatMap((lesson) => {
         const quizIds = quizIdsForLesson(lesson);
         if (!quizIds.length) return [];
         const passedStudents = rows.filter(
@@ -259,8 +281,9 @@ export async function TeacherClassDetail({
             <div>
               <h2>Student progress</h2>
               <p className="muted">
-                A chapter is complete when the student passes every quiz in it
-                with at least 60%. The best attempt is used, and quizzes can be
+                Teacher progress counts Advanced quizzes only. A chapter is
+                complete when the student passes every Advanced quiz in it with
+                at least 60%. The best attempt is used, and quizzes can be
                 retaken.
               </p>
             </div>
@@ -284,11 +307,11 @@ export async function TeacherClassDetail({
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
-                  <TableHead>Chapters</TableHead>
-                  <TableHead>Quizzes</TableHead>
+                  <TableHead>Advanced chapters</TableHead>
+                  <TableHead>Advanced quizzes</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Last quiz</TableHead>
+                  <TableHead>Last Advanced quiz</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -331,13 +354,13 @@ export async function TeacherClassDetail({
                           {quiz.completed ? "Completed" : "In progress"}
                         </Badge>
                       ) : (
-                        <span className="muted">No quizzes</span>
+                        <span className="muted">No Advanced quizzes</span>
                       )}
                     </TableCell>
                     <TableCell>
                       {latestQuiz
                         ? dateLabel(latestQuiz.createdAt)
-                        : "No quiz yet"}
+                        : "No Advanced quiz yet"}
                     </TableCell>
                     <TableCell className="text-right">
                       <RemoveMemberButton
@@ -369,10 +392,10 @@ export async function TeacherClassDetail({
       <section className="panel mt-6">
         <div className="panel-heading">
           <div>
-            <h2>Chapter completion</h2>
+            <h2>Advanced chapter completion</h2>
             <p className="muted">
-              Students who passed every quiz in each chapter. Chapters without
-              quizzes are not counted.
+              Students who passed every Advanced quiz in each Advanced chapter.
+              Chapters without quizzes are not counted.
             </p>
           </div>
           <Badge>
@@ -382,15 +405,15 @@ export async function TeacherClassDetail({
         </div>
         {!chapterStats.length ? (
           <p className="muted">
-            This course has no quiz activities yet. Publish a course with
-            quizzes to track class progress here.
+            This course has no Advanced quiz activities yet. Publish Advanced
+            lessons with quizzes to track class progress here.
           </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Chapter</TableHead>
-                <TableHead>Quizzes</TableHead>
+                <TableHead>Advanced chapter</TableHead>
+                <TableHead>Advanced quizzes</TableHead>
                 <TableHead>Students passed</TableHead>
                 <TableHead>Avg score</TableHead>
                 <TableHead>Completion</TableHead>
