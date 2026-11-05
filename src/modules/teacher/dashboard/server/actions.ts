@@ -19,7 +19,7 @@ export async function sendFeedbackAction(
       .max(2000)
       .parse(message);
     await addTeacherFeedback(await getCurrentUser(), courseId, studentId, text);
-    revalidatePath("/teacher/students");
+    revalidatePath("/teacher/students", "layout");
     revalidatePath("/student/progress");
     return { ok: true, data: null };
   } catch (error) {

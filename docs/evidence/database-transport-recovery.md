@@ -11,7 +11,7 @@ Native direct WebSocket initially timed out too. Through the existing explicit H
 ## Changes
 
 - Official Neon PostgreSQL-compatible WebSocket Pool with optional explicit DATABASE_PROXY_URL; no global shell proxy guessing, HTTP-SQL substitution, write replay, demo fallback or provider switch. TLS certificate validation retained. The local root .env selects the proxy path verified above; .env remains gitignored.
-- 5s connection budget, idle recycling, max connection lifetime. Cache keys include configuration and factory identity; ended pools are replaced. Auth, course, classroom and administration adapters rebind to replacement pools.
+- 5s connection budget, idle recycling, max connection lifetime. Cache keys include configuration and factory identity; ended pools are replaced. Auth, course, classroom, administration, content annotation and discussion adapters rebind to replacement pools.
 - One automatic saved-session recovery check, online event recovery and manual checking button; finite timeout, cancellation and no endless polling. Anonymous/invalid roles never gain access; sign-in/registration are not automatically replayed.
 - Body-attribute-only hydration compatibility for external extension attributes; child checks remain active.
 

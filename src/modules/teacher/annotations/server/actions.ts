@@ -6,7 +6,7 @@ import type { ActionResult, ContentAnnotation } from "@/shared/contracts";
 import { actionError } from "@/shared/contracts/errors";
 
 function revalidateAnnotations(courseId: string) {
-  revalidatePath("/teacher/students");
+  revalidatePath("/teacher/students", "layout");
   revalidatePath(`/teacher/courses/${courseId}`);
   revalidatePath(`/student/courses/${courseId}`);
 }

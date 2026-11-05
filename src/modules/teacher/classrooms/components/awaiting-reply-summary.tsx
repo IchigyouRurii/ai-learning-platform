@@ -53,7 +53,7 @@ export function AwaitingReplySummary({
               )}
               {notes > 0 && (
                 <Button asChild variant="outline">
-                  <Link href={`/teacher/students?courseId=${encodeURIComponent(courseId)}#private-notes`}>Open private notes ({notes})</Link>
+                  <Link href={`/teacher/students?view=notes&course=${encodeURIComponent(courseId)}&status=open#private-notes`}>Open private notes ({notes})</Link>
                 </Button>
               )}
             </div>

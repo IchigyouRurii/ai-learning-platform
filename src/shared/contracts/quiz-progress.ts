@@ -1,4 +1,5 @@
-import type { Course } from "./course";
+import type { Course, CourseLevel } from "./course";
+import { lessonsAtLevel } from "./course-levels";
 import type { Submission } from "./platform";
 
 export const QUIZ_PASS_RATIO = 0.6;
@@ -28,6 +29,7 @@ export function calculateQuizProgress(
   course: Course,
   submissions: Submission[],
   studentId: string,
+  difficulty?: CourseLevel,
 ): QuizProgress {
   const relevant = submissions.filter(
     (item) =>
@@ -36,8 +38,14 @@ export function calculateQuizProgress(
       item.studentId === studentId,
   );
 
+  // Teacher statistics pass "advanced" so preview and optional expert content
+  // does not count toward required quiz completion. Learner pages pass the
+  // learner's active level instead.
+  const lessons = difficulty
+    ? lessonsAtLevel(course.lessons, difficulty)
+    : course.lessons;
   const allBestScores: number[] = [];
-  const lessons = course.lessons.map((lesson): QuizLessonProgress => {
+  const progressByLesson = lessons.map((lesson): QuizLessonProgress => {
     const quizIds = lesson.blocks.flatMap((block) =>
       block.type === "activity" && block.activity.type === "quiz"
         ? [block.activity.id]
@@ -75,10 +83,10 @@ export function calculateQuizProgress(
     };
   });
 
-  const withQuizzes = lessons.filter((lesson) => lesson.hasQuiz);
+  const withQuizzes = progressByLesson.filter((lesson) => lesson.hasQuiz);
   const passedLessons = withQuizzes.filter((lesson) => lesson.passed).length;
   return {
-    lessons,
+    lessons: progressByLesson,
     lessonsWithQuizzes: withQuizzes.length,
     passedLessons,
     totalQuizzes: withQuizzes.reduce(

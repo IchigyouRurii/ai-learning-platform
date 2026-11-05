@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createSeedState } from "@/shared/database/seed";
-import { calculateQuizProgress } from "@/shared/contracts";
+import {
+  calculateQuizProgress,
+  editableCourseLevels,
+  type Course,
+} from "@/shared/contracts";
 import type { Submission } from "@/shared/contracts";
 
 const course = createSeedState().courses[0];
@@ -84,5 +88,55 @@ describe("quiz progress", () => {
       studentId,
     );
     expect(progress.passedQuizzes).toBe(1);
+  });
+
+  it("counts only the requested difficulty for teacher Advanced progress", () => {
+    const leveled = {
+      ...course,
+      lessons: editableCourseLevels(course).lessons,
+    } as Course;
+    const quizIdsAt = (level: "beginner" | "advanced" | "expert") =>
+      leveled.lessons
+        .filter((lesson) => lesson.difficulty === level)
+        .flatMap((lesson) =>
+          lesson.blocks.flatMap((block) =>
+            block.type === "activity" && block.activity.type === "quiz"
+              ? [block.activity.id]
+              : [],
+          ),
+        );
+    const beginnerIds = quizIdsAt("beginner");
+    const advancedIds = quizIdsAt("advanced");
+    const expertIds = quizIdsAt("expert");
+    expect(beginnerIds.length).toBeGreaterThan(0);
+    expect(advancedIds.length).toBeGreaterThan(0);
+    expect(expertIds.length).toBeGreaterThan(0);
+
+    const everyLevel = [...beginnerIds, ...advancedIds, ...expertIds].map(
+      (id) => attempt(id, 5),
+    );
+    const advanced = calculateQuizProgress(
+      leveled,
+      everyLevel,
+      studentId,
+      "advanced",
+    );
+    expect(advanced.totalQuizzes).toBe(advancedIds.length);
+    expect(advanced.passedQuizzes).toBe(advancedIds.length);
+    expect(advanced.completed).toBe(true);
+
+    const withoutAdvanced = calculateQuizProgress(
+      leveled,
+      [...beginnerIds, ...expertIds].map((id) => attempt(id, 5)),
+      studentId,
+      "advanced",
+    );
+    expect(withoutAdvanced.passedQuizzes).toBe(0);
+    expect(withoutAdvanced.completed).toBe(false);
+
+    const allLevels = calculateQuizProgress(leveled, everyLevel, studentId);
+    expect(allLevels.totalQuizzes).toBe(
+      beginnerIds.length + advancedIds.length + expertIds.length,
+    );
   });
 });

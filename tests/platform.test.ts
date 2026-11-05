@@ -156,6 +156,7 @@ describe("platform permissions and learning lifecycle", () => {
       "请补充一个具体验收条件。",
     );
     expect((await getWorkspace(student)).feedback).toHaveLength(1);
+    expect((await getWorkspace(teacher)).feedback).toHaveLength(1);
     expect(
       (await getWorkspace({ ...student, id: "other-student" })).feedback,
     ).toHaveLength(0);
