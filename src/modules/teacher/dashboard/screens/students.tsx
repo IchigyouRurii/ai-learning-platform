@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { ArrowUpRight, BookOpen, Users } from "lucide-react";
 import {
-  calculateProgress,
   getCurrentUser,
   getWorkspace,
   platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { AnnotationItem } from "@/modules/teacher/annotations/components/content-questions";
-import type { ContentAnnotation, Course } from "@/shared/contracts";
+import {
+  calculateQuizProgress,
+  type ContentAnnotation,
+  type Course,
+} from "@/shared/contracts";
 import { Pagination } from "@/shared/ui/components/pagination";
 import { Badge, EmptyState, PageHeading } from "@/shared/ui/primitives";
 import { NotesFilterForm } from "../components/notes-filter-form";
@@ -19,6 +22,7 @@ import {
   groupStudentCourses,
   paginate,
   parsePageNumber,
+  studentFilterOptions,
   toParamArray,
   type StudentCourseInput,
   type TeachingFilters,
@@ -136,11 +140,11 @@ export async function TeacherTeachingManagement({
     const course = coursesById.get(enrollment.courseId);
     if (!course) continue;
     const key = `${course.id}:${enrollment.studentId}`;
-    const progress = calculateProgress(
+    const quiz = calculateQuizProgress(
       course,
       workspace.submissions,
       enrollment.studentId,
-      enrollment.difficulty,
+      "advanced",
     );
     pairs.push({
       studentId: enrollment.studentId,
@@ -149,9 +153,11 @@ export async function TeacherTeachingManagement({
       courseTitle: course.title,
       classIds: classIdsFor(course.id, enrollment.studentId),
       classNames: classNamesFor(course.id, enrollment.studentId),
-      done: progress.done,
-      total: progress.total,
-      percent: progress.percent,
+      done: quiz.passedQuizzes,
+      total: quiz.totalQuizzes,
+      percent: quiz.totalQuizzes
+        ? Math.round((quiz.passedQuizzes / quiz.totalQuizzes) * 100)
+        : 0,
       lastActivityAt: lastActivities.get(key) ?? null,
       sentFeedbackCount: feedbackCounts.get(key) ?? 0,
       openNoteCount: openCounts.get(key) ?? 0,
@@ -167,6 +173,7 @@ export async function TeacherTeachingManagement({
     filters.courseIds = [legacyCourseId];
   }
   const students = groupStudentCourses(pairs, filters);
+  const studentOptions = studentFilterOptions(pairs);
   const pageData = paginate(students, parsePageNumber(searchParams.page));
   const returnTo = buildStudentsHref(filters, pageData.page);
   const enrolledCourseIds = new Set(
@@ -267,8 +274,10 @@ export async function TeacherTeachingManagement({
       {view === "students" ? (
         <>
           <TeachingFilterForm
+            key={`${filters.courseIds.join(",")}|${filters.classIds.join(",")}|${filters.studentQuery}`}
             courseOptions={courseOptions}
             classOptions={classOptions}
+            studentOptions={studentOptions}
             filters={filters}
             matchingCount={students.length}
           />

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildStudentsHref,
+  filterStudentOptions,
   groupStudentCourses,
   paginate,
   parsePageNumber,
   safeReturnTo,
+  studentFilterOptions,
   toParamArray,
   type StudentCourseInput,
 } from "@/modules/teacher/dashboard/teaching-filters";
@@ -153,5 +155,68 @@ describe("teaching management filters", () => {
     expect(safeReturnTo("https://example.com")).toBeNull();
     expect(safeReturnTo("//evil.example/teacher/students")).toBeNull();
     expect(safeReturnTo("/student/progress")).toBeNull();
+  });
+
+  it("builds and narrows student suggestions by course, class and name", () => {
+    const options = studentFilterOptions(pairs);
+    expect(options).toEqual([
+      {
+        id: "alice",
+        name: "Alice Chen",
+        courseIds: ["ai", "web"],
+        classIds: ["class-a", "class-b"],
+      },
+      { id: "bob", name: "Bob Li", courseIds: ["ai"], classIds: [] },
+    ]);
+    expect(
+      filterStudentOptions(options, {
+        courseIds: ["web"],
+        classIds: [],
+        query: "",
+      }).map((option) => option.name),
+    ).toEqual(["Alice Chen"]);
+    expect(
+      filterStudentOptions(options, {
+        courseIds: [],
+        classIds: ["class-b"],
+        query: "",
+      }).map((option) => option.name),
+    ).toEqual(["Alice Chen"]);
+    expect(
+      filterStudentOptions(options, {
+        courseIds: [],
+        classIds: [],
+        query: "ali",
+      }).map((option) => option.name),
+    ).toEqual(["Alice Chen"]);
+
+    const directory = [
+      {
+        id: "aa",
+        name: "student-aa",
+        courseIds: ["ai"],
+        classIds: ["class-a"],
+      },
+      {
+        id: "bb",
+        name: "student-bb",
+        courseIds: ["ai"],
+        classIds: ["class-a"],
+      },
+    ];
+    expect(
+      filterStudentOptions(directory, {
+        courseIds: [],
+        classIds: ["class-a"],
+        query: "stu",
+      }).map((option) => option.name),
+    ).toEqual(["student-aa", "student-bb"]);
+    expect(
+      filterStudentOptions(directory, {
+        courseIds: [],
+        classIds: ["class-a"],
+        query: "student-a",
+      }).map((option) => option.name),
+    ).toEqual(["student-aa"]);
   });
 });

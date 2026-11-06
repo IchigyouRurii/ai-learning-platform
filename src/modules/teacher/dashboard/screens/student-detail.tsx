@@ -2,14 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MessageSquareText } from "lucide-react";
 import {
-  calculateProgress,
   getCurrentUser,
   getWorkspace,
   platformExtensions,
 } from "@/modules/platform";
 import { RoleGate } from "@/modules/platform/components/app-shell";
 import { ContentQuestions } from "@/modules/teacher/annotations/components/content-questions";
-import type { ContentAnnotation, Course } from "@/shared/contracts";
+import {
+  calculateQuizProgress,
+  type ContentAnnotation,
+  type Course,
+} from "@/shared/contracts";
 import { PageHeading, ProgressBar } from "@/shared/ui/primitives";
 import { annotationContext } from "../annotation-context";
 import { FeedbackForm } from "../components/feedback-form";
@@ -91,9 +94,6 @@ export async function TeacherStudentDetail({
   const activeCourse =
     studentCourses.find((course) => course.id === requestedCourse) ??
     studentCourses[0];
-  const activeEnrollment = enrollments.find(
-    (enrollment) => enrollment.courseId === activeCourse.id,
-  );
   const studentName =
     workspace.members.find((member) => member.id === studentId)?.name ??
     "Student";
@@ -168,12 +168,15 @@ export async function TeacherStudentDetail({
         feedback.teacherId === actor.id,
     )
     .toReversed();
-  const progress = calculateProgress(
+  const progress = calculateQuizProgress(
     activeCourse,
     workspace.submissions,
     studentId,
-    activeEnrollment?.difficulty,
+    "advanced",
   );
+  const progressPercent = progress.totalQuizzes
+    ? Math.round((progress.passedQuizzes / progress.totalQuizzes) * 100)
+    : 0;
   const openNotes = activeNotes.filter((note) => note.status === "open").length;
 
   const returnTo = safeReturnTo(searchParams.return);
@@ -229,10 +232,11 @@ export async function TeacherStudentDetail({
           <div>
             <p className="muted text-sm">Course progress</p>
             <div className="mt-2">
-              <ProgressBar percent={progress.percent} />
+              <ProgressBar percent={progressPercent} />
             </div>
             <p className="mt-1 text-sm">
-              {progress.done} / {progress.total} activities submitted
+              {progress.passedQuizzes} / {progress.totalQuizzes} Advanced
+              quizzes passed
             </p>
           </div>
           <div>

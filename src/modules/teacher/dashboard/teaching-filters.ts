@@ -35,6 +35,13 @@ export type StudentSummary = {
   lastActivityAt: string | null;
 };
 
+export type StudentFilterOption = {
+  id: string;
+  name: string;
+  courseIds: string[];
+  classIds: string[];
+};
+
 export type PageSlice<T> = {
   items: T[];
   page: number;
@@ -74,6 +81,60 @@ export function safeReturnTo(
     return null;
   }
   return raw;
+}
+
+export function studentFilterOptions(
+  pairs: StudentCourseInput[],
+): StudentFilterOption[] {
+  const students = new Map<
+    string,
+    { id: string; name: string; courseIds: Set<string>; classIds: Set<string> }
+  >();
+  for (const pair of pairs) {
+    const existing = students.get(pair.studentId) ?? {
+      id: pair.studentId,
+      name: pair.studentName,
+      courseIds: new Set<string>(),
+      classIds: new Set<string>(),
+    };
+    existing.courseIds.add(pair.courseId);
+    for (const classId of pair.classIds) existing.classIds.add(classId);
+    students.set(pair.studentId, existing);
+  }
+  return [...students.values()]
+    .map((student) => ({
+      id: student.id,
+      name: student.name,
+      courseIds: [...student.courseIds],
+      classIds: [...student.classIds],
+    }))
+    .toSorted(
+      (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
+    );
+}
+
+export function filterStudentOptions(
+  options: StudentFilterOption[],
+  filters: { courseIds: string[]; classIds: string[]; query: string },
+): StudentFilterOption[] {
+  const courseIds = new Set(filters.courseIds);
+  const classIds = new Set(filters.classIds);
+  const query = filters.query.trim().toLowerCase();
+  return options.filter((option) => {
+    if (
+      courseIds.size &&
+      !option.courseIds.some((courseId) => courseIds.has(courseId))
+    ) {
+      return false;
+    }
+    if (
+      classIds.size &&
+      !option.classIds.some((classId) => classIds.has(classId))
+    ) {
+      return false;
+    }
+    return !query || option.name.toLowerCase().includes(query);
+  });
 }
 
 export function groupStudentCourses(
