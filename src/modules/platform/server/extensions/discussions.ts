@@ -159,8 +159,21 @@ export function createDiscussionService(
 }
 
 let defaultRepository: DiscussionRepository | undefined;
+let defaultRepositoryFactory: typeof createDiscussionRepository | undefined;
+let defaultRepositoryPool: ReturnType<typeof getDatabasePool> | undefined;
 
 export const discussions = createDiscussionService(() => {
-  defaultRepository ??= createDiscussionRepository(getDatabasePool());
+  const pool = getDatabasePool();
+  // A hot update can change the factory or replace the pool. Rebind instead of
+  // keeping a stale adapter pointed at an ended pool.
+  if (
+    !defaultRepository ||
+    defaultRepositoryFactory !== createDiscussionRepository ||
+    defaultRepositoryPool !== pool
+  ) {
+    defaultRepository = createDiscussionRepository(pool);
+    defaultRepositoryFactory = createDiscussionRepository;
+    defaultRepositoryPool = pool;
+  }
   return defaultRepository;
 });

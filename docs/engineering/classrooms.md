@@ -9,7 +9,7 @@
 - 合同：`shared/contracts/features/classrooms.ts`；服务：`platform/server/extensions/classrooms.ts`；仓储：`shared/database/classroom-repository.ts`。
 - 当前模型是**一个班级绑定一门课程**（`classrooms.course_id`）。`course_assignments` 表保留，但当前班级 UI 不使用多课程/多版本分配。
 - 邀请码、邮件邀请、管理员班级治理页面未恢复；管理员用户/课程管理和课程下架保留。
-- 教师班级完成度按**测验**统计：每章节单独计算班级完成度；某个 quiz 取最好一次成绩，≥60% 算通过；一章内所有 quiz 都通过才算该章完成；整门课所有 quiz 都通过才算学生完成。教师端不再展示活动/章节完成，章节完成只保留给学生自己做学习定位。
+- 教师班级完成度只统计 **Advanced 难度**的测验：每章节单独计算班级完成度；某个 quiz 取最好一次成绩，≥60% 算通过；一章内所有 Advanced quiz 都通过才算该章完成；整门课所有 Advanced quiz 都通过才算学生完成。Beginner 供预习、Expert 供兴趣学习，不计入教师考核。教师端不再展示活动/章节完成，章节完成只保留给学生自己做学习定位。
 - 已被班级绑定的课程禁止学生自助加入，学生需要由教师加入班级；没有绑定班级的公开课程仍可通过课程广场自助选课。
 - 移除成员时，如果没有其他 active 班级学习同一课程，该课程 enrollment 的 `direct_access` 设为 false；重新加入时 upsert 为 true。enrollment 行和学习记录保留，不物理删除。
 
@@ -49,6 +49,7 @@ pages; communication lookup failures display Unavailable rather than zero.
 Awaiting reply is clickable and opens a centered accessible dialog. It lists the
 bound course when pending items exist, with separate discussion and private-note
 links. Each class currently binds one course. Discussion links target the course
-Q&A section; private-note links filter Teaching Management by courseId. Empty and
+Q&A section; private-note links open the course-filtered Private notes view in
+Teaching Management with the open status selected. Empty and
 unavailable states are explicit. Counts remain scoped to current class members;
 destination pages retain their normal course-wide teacher access.

@@ -17,6 +17,12 @@ export const annotationCategorySchema = z.enum([
 ]);
 export const annotationStatusSchema = z.enum(["open", "replied", "resolved"]);
 
+export const openAnnotationCountSchema = z.object({
+  courseId: idSchema,
+  studentId: idSchema,
+  count: z.number().int().nonnegative(),
+});
+
 export const contentAnnotationSchema = z.object({
   id: idSchema,
   courseId: idSchema,
@@ -76,6 +82,13 @@ export const annotationFeatures = {
     "教师只能读取自己课程中的批注；可按课程或学生过滤。",
     "implemented",
   ),
+  openCounts: feature(
+    z.strictObject({ courseId: idSchema.optional() }),
+    z.array(openAnnotationCountSchema),
+    ["teacher"],
+    "教师只能统计自己课程中 status='open' 的批注；按课程和学生分组，可按课程过滤。",
+    "implemented",
+  ),
   reply: feature(
     z.strictObject({
       annotationId: idSchema,
@@ -105,3 +118,4 @@ export const annotationFeatures = {
 export type AnnotationCategory = z.infer<typeof annotationCategorySchema>;
 export type AnnotationStatus = z.infer<typeof annotationStatusSchema>;
 export type ContentAnnotation = z.infer<typeof contentAnnotationSchema>;
+export type OpenAnnotationCount = z.infer<typeof openAnnotationCountSchema>;

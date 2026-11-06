@@ -19,6 +19,7 @@ import type {
   LearningProgress,
   LessonCompletion,
   ModerationRecord,
+  OpenAnnotationCount,
   PublishedRevision,
   QuestionReply,
   QuestionThread,
@@ -250,6 +251,10 @@ export interface AnnotationRepository {
     actor: User,
     filter: PageInput & { courseId?: string; studentId?: string },
   ): Promise<Page<ContentAnnotation> | null>;
+  openCounts(
+    actor: User,
+    filter: { courseId?: string },
+  ): Promise<OpenAnnotationCount[]>;
   reply(
     actor: User,
     annotationId: string,

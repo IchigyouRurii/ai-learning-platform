@@ -35,6 +35,7 @@ export function CourseTitleField() {
 - AppShell 已由工作空间路由提供，不在业务页面重复包裹。
 - 平台 Logo 统一复用 `@/shared/ui/brand-logo` 的 `BrandLogo`；SVG 位于 `public/brand-mark.svg`，白色图标搭配深蓝底。
 - Teacher navigation includes Course Marketplace, My Creation, Teaching Management and Class. The sidebar expands on pointer entry and collapses on exit; route changes do not close it while the pointer remains inside. Keyboard focus can also expand it. There is no pin button.
+- Teaching Management uses a filterable student list (course, class, name; 25 per page) plus a per-student course-tab detail page, and a course-level Private notes tab. See [Teaching management](teaching-management.md).
 - 表单按钮显式写 type；Dialog 提供标题、描述并使用既有 Radix 焦点管理。
 
 ## 协作与验证

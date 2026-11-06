@@ -17,7 +17,7 @@ export function PassSummary({ passed, total }: { passed: number; total: number }
       <StatCard
         label={rate ? "Target achievement rate" : "Students meeting target"}
         value={rate ? `${total ? Math.round(passed / total * 100) : 0}%` : `${passed} / ${total}`}
-        detail={rate ? "Click to view count · All quizzes passed" : "Click to view rate · All quizzes passed"}
+        detail={rate ? "Click to view count · All Advanced quizzes passed" : "Click to view rate · All Advanced quizzes passed"}
         icon={<CheckCircle2 size={17} />}
       />
     </button>

@@ -37,8 +37,17 @@ export async function StudentClassDetail({ id }: { id: string }) {
   const course = workspace.courses.find(
     (item) => item.id === classroom.courseId,
   );
+  const enrollment = workspace.enrollments.find(
+    (item) =>
+      item.courseId === classroom.courseId && item.studentId === user.id,
+  );
   const quiz = course
-    ? calculateQuizProgress(course, workspace.submissions, user.id)
+    ? calculateQuizProgress(
+        course,
+        workspace.submissions,
+        user.id,
+        enrollment?.difficulty,
+      )
     : null;
   return (
     <>

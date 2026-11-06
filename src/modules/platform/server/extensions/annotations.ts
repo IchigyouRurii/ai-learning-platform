@@ -75,6 +75,18 @@ export function createAnnotationService(
       }
     },
 
+    async openCounts(actorInput, raw) {
+      try {
+        const actor = requireActor(actorInput);
+        requireRole(actor, annotationFeatures.openCounts.roles);
+        const input = annotationFeatures.openCounts.input.parse(raw);
+        const counts = await getRepository().openCounts(actor, input);
+        return { ok: true, data: counts };
+      } catch (error) {
+        return featureFailure(error);
+      }
+    },
+
     async reply(actorInput, raw) {
       try {
         const actor = requireActor(actorInput);
@@ -124,8 +136,21 @@ export function createAnnotationService(
 }
 
 let defaultRepository: AnnotationRepository | undefined;
+let defaultRepositoryFactory: typeof createAnnotationRepository | undefined;
+let defaultRepositoryPool: ReturnType<typeof getDatabasePool> | undefined;
 
 export const annotations = createAnnotationService(() => {
-  defaultRepository ??= createAnnotationRepository(getDatabasePool());
+  const pool = getDatabasePool();
+  // A hot update can change the factory or replace the pool. Rebind instead of
+  // keeping a stale adapter pointed at an ended pool.
+  if (
+    !defaultRepository ||
+    defaultRepositoryFactory !== createAnnotationRepository ||
+    defaultRepositoryPool !== pool
+  ) {
+    defaultRepository = createAnnotationRepository(pool);
+    defaultRepositoryFactory = createAnnotationRepository;
+    defaultRepositoryPool = pool;
+  }
   return defaultRepository;
 });

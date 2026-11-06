@@ -27,14 +27,16 @@ const statusLabels = {
   resolved: "Resolved",
 } as const;
 
-function AnnotationItem({
+export function AnnotationItem({
   courseId,
   annotation,
   context,
+  showCourseLink = true,
 }: {
   courseId: string;
   annotation: ContentAnnotation;
   context: AnnotationContext;
+  showCourseLink?: boolean;
 }) {
   const [replying, startReply] = useTransition();
   const [resolving, startResolve] = useTransition();
@@ -156,12 +158,14 @@ function AnnotationItem({
           )}
         </div>
       )}
-      <Link
-        href={`/teacher/courses/${courseId}#course-qa`}
-        className="text-link mt-3 inline-block text-sm"
-      >
-        Open course Q&A to post a correction →
-      </Link>
+      {showCourseLink && (
+        <Link
+          href={`/teacher/courses/${courseId}#course-qa`}
+          className="text-link mt-3 inline-block text-sm"
+        >
+          Open course Q&A to post a correction →
+        </Link>
+      )}
     </div>
   );
 }

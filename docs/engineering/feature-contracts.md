@@ -6,7 +6,7 @@
 
 现有登录、教师建课/首次发布、学生加入、开放回答、AI 反馈和教师反馈保留原来的调用入口。已有功能的可运行代码、云端连接测试与完整业务验收分别记录，不能混为一谈。
 
-新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、annotations 六项、classrooms 八项、discussions 八项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
+新增接口统一从服务端 `@/modules/platform` 的 `platformExtensions` 导入。可用 `getExtensionCapabilities()` 查看新增操作的状态、角色和资源权限约定。**administration 五项、annotations 七项、classrooms 八项、discussions 八项操作已启用**，详情见 [管理员功能](administration.md)、[班级管理](classrooms.md)、[师生问答实现](discussions.md)。其余扩展操作仍为 reserved：校验角色与输入后返回 `NOT_IMPLEMENTED`，不访问数据库、AI、邮件或对象存储，不返回空数组、假任务或模拟成功。其他模块已有的旧入口不因对应扩展仍预留而被认定为未实现。
 
 ```ts
 import { getCurrentUser, platformExtensions } from "@/modules/platform";
@@ -171,6 +171,7 @@ coding、simulation、game 已有题面/回答的基础结构，执行、模拟�
 
 - `create / listMine`：学生在指定发布版本的内容块上写私密批注并读取自己的批注。
 - `listForTeacher`：教师读取自己课程中的批注，可按课程或学生过滤。
+- `openCounts`：教师按课程和学生统计自己课程中 `status = 'open'` 的批注数量，供教学管理列表显示未处理徽标。
 - `reply / resolve`：教师回复或直接解决；一条批注保留一条教师回复。
 - `markSeen`：学生展开看到教师回复后标记已读。
 

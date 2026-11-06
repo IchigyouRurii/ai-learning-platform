@@ -6,6 +6,7 @@ import { ArrowRight, LoaderCircle } from "lucide-react";
 import { Button } from "@/shared/ui/components/button";
 import { Input } from "@/shared/ui/components/input";
 import { Label } from "@/shared/ui/components/label";
+import { PasswordInput } from "@/shared/ui/components/password-input";
 import { SessionRecoveryNotice } from "./session-recovery-notice";
 import { authClient } from "./auth-client";
 import { resolveLoginEmail } from "./login-identifier";
@@ -137,10 +138,9 @@ export function AuthForm({
           <Label htmlFor="auth-password" className={labelClassName}>
             Password
           </Label>
-          <Input
+          <PasswordInput
             id="auth-password"
             className={inputClassName}
-            type="password"
             name="password"
             autoComplete={register ? "new-password" : "current-password"}
             required

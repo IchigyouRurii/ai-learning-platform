@@ -13,6 +13,14 @@ vi.mock("@/shared/database/pool", () => ({ getDatabasePool: mocks.getPool }));
 vi.mock("@/shared/database/demo-repository", () => ({
   createDemoRepository: mocks.createStore,
 }));
+const annotationMocks = vi.hoisted(() => {
+  const openCounts = vi.fn();
+  const create = vi.fn(() => ({ openCounts }));
+  return { create, openCounts };
+});
+vi.mock("@/shared/database/annotation-repository", () => ({
+  createAnnotationRepository: annotationMocks.create,
+}));
 const keys = [
   "minicourseLocalPlatform",
   "minicourseNeonPlatform",
@@ -74,5 +82,20 @@ describe("repository cache across hot updates", () => {
     expect(mocks.createStore).toHaveBeenCalledOnce();
     expect(mocks.store.mutate).not.toHaveBeenCalled();
     expect(mocks.getPool).not.toHaveBeenCalled();
+  });
+  it("rebinds the annotations adapter when the pool is replaced", async () => {
+    const firstPool = { query: vi.fn() };
+    const secondPool = { query: vi.fn() };
+    mocks.getPool
+      .mockReturnValueOnce(firstPool)
+      .mockReturnValueOnce(secondPool);
+    annotationMocks.openCounts.mockResolvedValue([]);
+    const { annotations } =
+      await import("@/modules/platform/server/extensions/annotations");
+    await annotations.openCounts(actor, {});
+    await annotations.openCounts(actor, {});
+    expect(annotationMocks.create).toHaveBeenCalledTimes(2);
+    expect(annotationMocks.create).toHaveBeenNthCalledWith(1, firstPool);
+    expect(annotationMocks.create).toHaveBeenNthCalledWith(2, secondPool);
   });
 });
